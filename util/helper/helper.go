@@ -110,21 +110,22 @@ func AskYesNoConfirm(prompt string) bool {
 
 // Return fullpath = join(dir,name), suitable for creating a new file in dir.
 // If file already exists, append the proper numeric suffix to make sure fullpath does not exist.
-func GetNewFilePath(dir string, name string) (fullpath string) {
+// Note if a file system access error happens, it return last checked filename path along with the error
+func GetNewFilePath(dir string, name string) (fullpath string, err error) {
 	if dir == "" || name == "" {
-		return ""
+		return "", fmt.Errorf(("empty dir & name"))
 	}
 	fullpath = filepath.Join(dir, name)
-	if !util.FileExists(fullpath) {
-		return
+	if exists, err := util.FileExists(fullpath); !exists || err != nil {
+		return fullpath, err
 	}
 	i := 1
 	ext := filepath.Ext(name)
 	base := name[:len(name)-len(ext)]
 	for {
-		fullpath = filepath.Join(dir, fmt.Sprintf("%s.%d%s", base, i, ext))
-		if !util.FileExists(fullpath) {
-			return
+		fullpath = filepath.Join(dir, fmt.Sprintf("%s (%d)%s", base, i, ext))
+		if exists, err := util.FileExists(fullpath); !exists || err != nil {
+			return fullpath, err
 		}
 		i++
 	}
@@ -176,7 +177,7 @@ func NormalizeName(continueOnError bool, pathes ...string) (renamed int, err err
 		}
 		if newbasename != basename {
 			newpath := filepath.Join(dir, newbasename)
-			if util.FileExists(newpath) {
+			if exists, err := util.FileExists(newpath); exists || err != nil {
 				if !continueOnError {
 					return renamed, err
 				}
@@ -227,10 +228,14 @@ func NormalizeName(continueOnError bool, pathes ...string) (renamed int, err err
 // Make a new empty temp dir at tmpdir location.
 // If tmpdir already exists, clean it first(remove itself with all contents inside it).
 func MakeCleanTmpDir(tmpdir string) error {
-	if util.FileExists(tmpdir) {
+	exists, err := util.FileExists(tmpdir)
+	if err != nil {
+		return err
+	}
+	if exists {
 		if err := os.RemoveAll(tmpdir); err != nil {
 			return err
 		}
 	}
-	return os.MkdirAll(tmpdir, 0700)
+	return os.MkdirAll(tmpdir, 0755)
 }

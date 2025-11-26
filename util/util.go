@@ -183,12 +183,14 @@ func UnmarshalJson[T any](source []byte) (T, error) {
 	return target, nil
 }
 
-// Check whether a file (or dir) with name exists in file system
-func FileExists(name string) bool {
-	if _, err := os.Stat(name); err == nil || !errors.Is(err, fs.ErrNotExist) {
-		return true
+// Check whether a file (or dir) with name exists in file system.
+// If it encounter an file system access error, return false,err
+func FileExists(name string) (bool, error) {
+	_, err := os.Stat(name)
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil
 	}
-	return false
+	return err == nil, err
 }
 
 func ParseInt[T constraints.Integer](s string, defaultValue T) T {

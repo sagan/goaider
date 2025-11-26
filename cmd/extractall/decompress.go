@@ -3,12 +3,9 @@ package extractall
 import (
 	"fmt"
 	"io/fs"
-	"net/url"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strings"
 
@@ -23,235 +20,70 @@ import (
 	"github.com/sagan/goaider/util/stringutil"
 )
 
-const (
-	STR_STOP_NOT_EMPTY = "Stop due to dir is not comprised of single archive"
-	STR_FILES_ARCHIVE  = "Stop due to dir is comprised of a archive that should not be decompressed"
-	EXT_RAR            = ".rar"
-	EXT_R00            = ".r00"
-	EXT_R01            = ".r01"
-	EXT_Z01            = ".z01"
-	EXT_ZIP            = ".zip"
-	EXT_7Z             = ".7z"
-	EXT_EXE            = ".exe"
-	EXT_7Z_001         = ".7z.001" // 7z 分卷压缩文件
-)
+const TMP_DIR = ".xtmp"
 
-const TMP_DIR = ".tmp"
-const ORIG_DIR = ".orig"
-
-const DEFAULT_ZIPMODE = 1 // Zip filename encoding detection mode. 0 -  strict; 1 - guess the best (shift_jis > gbk)
-
-// In priority order.
-var CjkCharsets = []string{
-	"UTF-8",
-	"Shift_JIS",
-	"GB-18030",
-	"EUC-KR",
-	"EUC-JP",
-	"Big5", //  !部分GBK字符串误识别为 Big5
+type ExtractOptions struct {
+	ZipFilenameEncoding             string   // Manually set (do not auto detect) zip filename encoding. Common encodings: "UTF-8","Shift_JIS", "GB-18030","EUC-KR", "EUC-JP", "Big5"
+	StrictFilenameEncodingDetection bool     // Use strict zip filename encoding detection mode
+	Passwords                       []string // Try these passwords to decrypt encrypted archives
+	SevenzipBinary                  string   // 7z.exe / 7z binary file name or path
+	CreateArchiveNameFolder         bool     // Always create folder for each archive, use archive file base name (foo.rar => foo) as folder name
 }
 
-// ".rar", ".zip", ".7z", ".r00", ".exe".
-var SupportedFormats = []string{EXT_RAR, EXT_ZIP, EXT_7Z, EXT_R00, EXT_EXE}
-
-// Match with ".r00" - "".r99".
-var rarMultiVolumeLegacyExtRegex = regexp.MustCompile(`^\.r\d{2}$`)
-
-// Match with "*.partX.rar" or "*.partX.exe"
-var rarPartedRegex = regexp.MustCompile(`^(?P<prefix>.+)\.part\d+\.(rar|exe)$`)
-
-// Match with ".partX.rar"
-var rarPartedExtRegex = regexp.MustCompile(`^\.part\d+\.rar$`)
-
-// Match with ".z01" - "".z99".
-var zipMultiVolumeExtRegex = regexp.MustCompile(`^\.z\d{2}$`)
-
-// Match with ".7z.001" - ".7z.999".
-var sevenzipMultiVolumeExtRegex = regexp.MustCompile(`^\.7z\.\d{3}$`)
-
-// 文件名里含有一些内容的压缩包不应当解压。不区分大小写。
-var NoDecompressFilenames = []string{
-	"(files)",
-}
-
-var NoDecompressFilenamePatterns = []*regexp.Regexp{
-	regexp.MustCompile(`(?i)第\s*\d+\s*[卷集]`),
-	regexp.MustCompile(`(?i)\s\d+\.(zip|rar|7z)$`), // "... 01.zip", it must exclude name likes "RJ378782.1.zip" .
-	regexp.MustCompile(`(?i)\bvol\.\d+\b`),         // "... Vol.01 ....rar"
-	regexp.MustCompile(`(?i)\b(` +
-		`iso|mdx|iso+mds|mdf+mds|img+cue|` +
-		`同人CG集|ゲームCG|同人ゲームCG|18禁ゲームCG|Game CG|CG|` +
-		`成年コミック|コミック|一般コミック|同人誌|漫画|マンガ|まんが|Comic|` +
-		`18禁ゲーム|一般ゲーム|同人ゲーム|ゲーム|Game|パッケージ版|` +
-		`Scan` +
-		`)\b`),
+func ExtractAll(dir string, targetDir string, options *ExtractOptions) (err error) {
+	archiveFiles, _, err := GetArchiveFiles(dir)
+	if err != nil {
+		return err
+	}
+	log.Printf("Processing dir %q: extract %d archive files to %s/", dir, len(archiveFiles), targetDir)
+	for _, archiveFile := range archiveFiles {
+		err = Extract(dir, targetDir, archiveFile, options)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // decompress rar / zip / 7z files
-// All files in input dir must belongs to the same compress file.
-// E.g. "foo.zip", or "foo.part1.rar" + "foo.part2.rar".
-// 根目录下的压缩文件必须被解压缩（除非压缩文件文件名含有特定字符串），否则会返回错误。
-func Transformer(dir string, options url.Values) (changed bool, err error) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return
-	}
-	// archive files first
-	slices.SortStableFunc(entries, func(a, b fs.DirEntry) int {
-		aIsArchive := isArchive(a.Name())
-		bIsArchive := isArchive(b.Name())
-		if aIsArchive && !bIsArchive {
-			return -1
-		} else if !aIsArchive && bIsArchive {
-			return 1
-		}
-		return 0
-	})
-	inputFile := "" // "foo.rar" or "foo.part1.rar".
-	format := ""    // ".rar" or ".zip"
-	prefix := ""    // 分卷压缩包的共同前缀。"foo.part1.rar" => "foo"
-	var originalFiles []string
-	for _, entry := range entries {
-		if entry.IsDir() {
-			log.Printf("is dir")
-			return
-		}
-		if inputFile == "" {
-			inputFile = entry.Name()
-			ext := path.Ext(inputFile)
-			if !isArchive(inputFile) {
-				log.Printf(STR_STOP_NOT_EMPTY)
-				return
-			}
-			if slices.ContainsFunc(NoDecompressFilenames, func(name string) bool {
-				return strings.Contains(strings.ToLower(inputFile), name)
-			}) || slices.ContainsFunc(NoDecompressFilenamePatterns, func(pattern *regexp.Regexp) bool {
-				return pattern.MatchString(inputFile)
-			}) {
-				log.Printf(STR_FILES_ARCHIVE)
-				return
-			}
-			if ext == EXT_RAR || ext == EXT_EXE {
-				if m := rarPartedRegex.FindStringSubmatch(inputFile); m != nil {
-					prefix = m[rarPartedRegex.SubexpIndex("prefix")]
-					format = EXT_RAR
-				} else {
-					prefix = inputFile[:len(inputFile)-len(ext)]
-				}
-			} else if strings.HasSuffix(inputFile, EXT_7Z_001) {
-				prefix = strings.TrimSuffix(inputFile, EXT_7Z_001)
-			} else {
-				prefix = inputFile[:len(inputFile)-len(ext)]
-			}
-			if ext == EXT_R00 {
-				format = EXT_RAR
-			} else if strings.HasSuffix(inputFile, EXT_7Z_001) {
-				format = EXT_7Z
-			} else if ext != EXT_EXE {
-				// for exe (self-extracting, e.g. "foo.part1.exe" + "foo.part2.rar"), scan additional file for format.
-				format = ext
-			}
-			originalFiles = append(originalFiles, inputFile)
-		} else if prefix == "" || !strings.HasPrefix(entry.Name(), prefix+".") {
-			err = fmt.Errorf("invalid")
-			return
-		} else {
-			suffix := entry.Name()[len(prefix):]
-			if format == EXT_RAR {
-				if !rarMultiVolumeLegacyExtRegex.MatchString(suffix) && !rarPartedExtRegex.MatchString(suffix) {
-					err = fmt.Errorf("invalid")
-					return
-				}
-			} else if format == EXT_ZIP {
-				if !zipMultiVolumeExtRegex.MatchString(suffix) {
-					err = fmt.Errorf("invalid")
-					return
-				}
-			} else if strings.HasSuffix(inputFile, EXT_7Z_001) {
-				if !sevenzipMultiVolumeExtRegex.MatchString(suffix) {
-					err = fmt.Errorf("invalid")
-					return
-				}
-			} else {
-				err = fmt.Errorf("invalid")
-				return
-			}
-			originalFiles = append(originalFiles, entry.Name())
-		}
-	}
-	// try treating single exe file as self-extracting rar.
-	if inputFile != "" && strings.HasSuffix(inputFile, EXT_EXE) && format == "" {
-		format = EXT_RAR
-	}
-	if inputFile == "" || format == "" {
-		log.Printf("no files to process")
-		return
-	}
-
-	origdir := filepath.Join(dir, ORIG_DIR)
-	if util.FileExists(origdir) {
-		entries, err = os.ReadDir(origdir)
-		if err != nil || len(entries) > 0 {
-			log.Printf("Folder is in inconsistent state: the .orig folder exists and can not be safely cleaned (%v)", err)
-			return
-		}
-		os.RemoveAll(origdir)
-	}
-
-	log.Printf("Dir is of archive %s (%v)", inputFile, originalFiles)
-	if filepath.Ext(inputFile) == EXT_EXE && format == EXT_RAR { // sfx
-		newFile := inputFile[:len(inputFile)-len(EXT_EXE)] + EXT_RAR
-		log.Printf("Rename %q to %q", inputFile, newFile)
-		changed = true
-		if util.FileExists(newFile) ||
-			atomic.ReplaceFile(filepath.Join(dir, inputFile), filepath.Join(dir, newFile)) != nil {
-			log.Printf("unable to rename .exe to .rar, abort")
-			return
-		}
-		if originalFiles[0] == inputFile {
-			originalFiles[0] = newFile
-		}
-		inputFile = newFile
-	}
-
-	tmpdir := filepath.Join(dir, TMP_DIR)
+func Extract(dir string, targetDir string, archive *ArchiveFile, options *ExtractOptions) (err error) {
+	tmpdir := filepath.Join(targetDir, TMP_DIR)
 	if err = helper.MakeCleanTmpDir(tmpdir); err != nil {
-		err = fmt.Errorf("failed to make tmpdir: %w", err)
-		return
+		err = fmt.Errorf("failed to make tmpdir %q: %w", tmpdir, err)
+		return err
 	}
 	defer os.RemoveAll(tmpdir)
-	inputFilePath := filepath.Join(dir, inputFile)
-	log.Printf("Extracting %q to %s", inputFilePath, tmpdir)
-	switch format {
-	case EXT_ZIP:
-		mode := DEFAULT_ZIPMODE
-		err = ExtractZip(inputFilePath, tmpdir, options["password"], mode)
+	inputFilePath := filepath.Join(dir, archive.Files[0])
+	log.Printf("Extracting %q to %s/ (tmpdir: %s/)", inputFilePath, targetDir, tmpdir)
+	switch archive.Format {
+	case FORMAT_ZIP:
+		err = ExtractZip(inputFilePath, tmpdir, options)
 	default:
 		_, _, _, err = xtractr.ExtractFile(&xtractr.XFile{
 			FilePath:  inputFilePath,
 			OutputDir: tmpdir,
-			Passwords: options["password"],
-			FileMode:  0600,
-			DirMode:   0700,
+			Passwords: options.Passwords,
+			FileMode:  0655,
+			DirMode:   0755,
 		})
-		// 目前 Go 对部分压缩文件格式支持不佳（例如 rar5 创建的自解压文件）。使用 7z 外部解压工具。
-		if err != nil && options.Has("sevenzip_binary") {
+		// 目前 Go 对部分压缩文件格式支持不佳（例如 rar5 创建的自解压文件）。尝试使用 7z 外部解压工具。
+		if err != nil && options.SevenzipBinary != "" {
 			passwords := []string{}
-			passwords = append(passwords, options["password"]...)
+			passwords = append(passwords, options.Passwords...)
 			if len(passwords) == 0 {
 				passwords = append(passwords, "")
 			}
 			err = nil
 			for _, password := range passwords {
 				if err = helper.MakeCleanTmpDir(tmpdir); err != nil {
-					return
+					return err
 				}
 				args := []string{"x", "-o" + tmpdir}
 				if password != "" {
 					args = append(args, "-p"+password)
 				}
 				args = append(args, inputFilePath)
-				cmd := exec.Command(options.Get("sevenzip_binary"), args...)
+				cmd := exec.Command(options.SevenzipBinary, args...)
 				var output []byte
 				output, err = cmd.CombinedOutput()
 				if err != nil {
@@ -267,50 +99,64 @@ func Transformer(dir string, options url.Values) (changed bool, err error) {
 		}
 	}
 	if err != nil {
-		return
+		return err
 	}
-	log.Printf("Extract done")
-	changed = true
-	if err = helper.MakeCleanTmpDir(origdir); err != nil {
-		return
-	}
-	for _, file := range originalFiles {
-		log.Printf("move original %s => %s", filepath.Join(dir, file), filepath.Join(origdir, file))
-		if err = atomic.ReplaceFile(filepath.Join(dir, file), filepath.Join(origdir, file)); err != nil {
-			return
-		}
-	}
+	log.Printf("Extract done to tmpdir. Move files to target dir")
 	contentDir := tmpdir
 	var contentFiles []fs.DirEntry
+	topLevelFolderName := ""
 	for {
 		contentFiles, err = os.ReadDir(contentDir)
 		if err != nil {
-			return
+			return err
 		}
 		if len(contentFiles) == 1 && contentFiles[0].IsDir() { // 去除压缩包里多层套娃文件夹结构
+			if topLevelFolderName == "" {
+				topLevelFolderName = contentFiles[0].Name()
+			}
 			log.Printf("Remove duplicate folder structure %q", contentFiles[0].Name())
 			contentDir = filepath.Join(contentDir, contentFiles[0].Name())
 			continue
 		}
 		break
 	}
+	dstDir := ""
+	if options.CreateArchiveNameFolder || topLevelFolderName != "" || len(contentFiles) > 1 {
+		if options.CreateArchiveNameFolder || topLevelFolderName == "" {
+			dstDir, err = helper.GetNewFilePath(targetDir, archive.Name)
+		} else {
+			dstDir, err = helper.GetNewFilePath(targetDir, topLevelFolderName)
+		}
+		if err != nil {
+			return err
+		}
+		if err = os.MkdirAll(dstDir, 0755); err != nil {
+			return err
+		}
+	} else {
+		dstDir = targetDir
+	}
+
+	// 如果压缩包根目录有多个文件或者指定了 ArchiveNameAsFolderName 选项，解压缩到 output_dir/<archive_name>/ ;
+	// 如果压缩包根目录只有 1 个文件夹，解压缩到 outout_dir/<archive_root_folder_name>/ ;
+	// 如果压缩包根目录里只有 1 个文件，解压缩到 output_dir/ .
+	// 去除压缩包里所有从顶层开始的套娃文件夹。
 	for _, file := range contentFiles {
-		if err = atomic.ReplaceFile(filepath.Join(contentDir, file.Name()),
-			filepath.Join(dir, file.Name())); err != nil {
-			return
+		src := filepath.Join(contentDir, file.Name())
+		dst := filepath.Join(dstDir, file.Name())
+		if exists, err := util.FileExists(dst); exists || err != nil {
+			return fmt.Errorf("target file %q already exists or can't access, err: %w", dst, err)
+		}
+		if err = atomic.ReplaceFile(src, dst); err != nil {
+			return err
 		}
 	}
-	for _, file := range originalFiles {
-		if err = atomic.ReplaceFile(filepath.Join(origdir, file), helper.GetNewFilePath("backups", file)); err != nil {
-			return
-		}
-	}
-	os.RemoveAll(origdir)
-	return
+	log.Printf("Archive %q extracted to %q", inputFilePath, dstDir)
+	return nil
 }
 
 // Extract inputFile to outputDir.
-func ExtractZip(inputFile, outputDir string, passwords []string, mode int) (err error) {
+func ExtractZip(inputFile, outputDir string, options *ExtractOptions) (err error) {
 	zipFile, err := zip.OpenReader(inputFile)
 	if err != nil {
 		if err == zip.ErrInsecurePath {
@@ -326,17 +172,24 @@ func ExtractZip(inputFile, outputDir string, passwords []string, mode int) (err 
 			rawFilenames = append(rawFilenames, file.Name)
 		}
 	}
-	encoding := ""
-	if len(rawFilenames) > 0 {
-		if encoding, _, err = DetectFilenamesEncoding(rawFilenames, mode); err != nil {
+	encoding := options.ZipFilenameEncoding
+	if encoding == "" && len(rawFilenames) > 0 {
+		if encoding, _, err = detectFilenamesEncoding(rawFilenames, options.StrictFilenameEncodingDetection); err != nil {
 			return fmt.Errorf("failed to detect filename encoding: %v", err)
 		}
+		log.Printf("detected zip filename encoding: %s", encoding)
 	}
-	log.Printf("detected zip filename encoding: %s", encoding)
-	if encoding == "UTF-8" {
-		encoding = ""
-	}
-	return ExtractZipFile(zipFile, outputDir, encoding, passwords)
+	return ExtractZipFile(zipFile, outputDir, encoding, options.Passwords)
+}
+
+// In priority order.
+var cjkCharsets = []string{
+	"UTF-8",
+	"Shift_JIS",
+	"GB-18030",
+	"EUC-KR",
+	"EUC-JP",
+	"Big5", //  !部分GBK字符串误识别为 Big5
 }
 
 // Return detected zip filenames charset.
@@ -351,7 +204,8 @@ func ExtractZip(inputFile, outputDir string, passwords []string, mode int) (err 
 //	如果一个文本的真正编码是Shift-JIS，那么优先使用Shift-JIS检测自然不会有问题；
 //	如果它是GBK，那么优先使用Shift-JIS检测也不大会返回Shift-JIS。
 //	因此Shift-JIS应当优先于GBK。
-func DetectFilenamesEncoding(rawFilenames []string, mode int) (encoding string, possibleEncodings []string, err error) {
+func detectFilenamesEncoding(rawFilenames []string, strictMode bool) (
+	encoding string, possibleEncodings []string, err error) {
 	detector := chardet.NewTextDetector()
 	for _, rawFilaname := range rawFilenames {
 		if stringutil.IsASCIIIndexBy8s32(rawFilaname) {
@@ -362,7 +216,7 @@ func DetectFilenamesEncoding(rawFilenames []string, mode int) (encoding string, 
 			return "", nil, err
 		}
 		results = util.FilterSlice(results, func(result chardet.Result) bool {
-			return slices.Contains(CjkCharsets, result.Charset)
+			return slices.Contains(cjkCharsets, result.Charset)
 		})
 		if len(results) == 0 {
 			return "", nil, fmt.Errorf("indeterministic result: not a cjk charset")
@@ -405,12 +259,11 @@ func DetectFilenamesEncoding(rawFilenames []string, mode int) (encoding string, 
 			}
 			if len(validEncodings) == 1 {
 				return validEncodings[0], nil, nil
-			} else {
-				if mode == 1 {
-					for _, encoding := range CjkCharsets {
-						if slices.Contains(validEncodings, encoding) {
-							return encoding, nil, nil
-						}
+			}
+			if !strictMode {
+				for _, encoding := range cjkCharsets {
+					if slices.Contains(validEncodings, encoding) {
+						return encoding, nil, nil
 					}
 				}
 			}
@@ -418,10 +271,4 @@ func DetectFilenamesEncoding(rawFilenames []string, mode int) (encoding string, 
 		}
 	}
 	return encoding, possibleEncodings, nil
-}
-
-// whether filename is a major archive file.
-// The "major" means it's the first / primary volume archive file if this is a multi-volume archive file.
-func isArchive(filename string) bool {
-	return slices.Contains(SupportedFormats, filepath.Ext(filename)) || strings.HasSuffix(filename, EXT_7Z_001)
 }

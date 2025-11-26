@@ -9,9 +9,10 @@ import (
 )
 
 var RootCmd = &cobra.Command{
-	Use:   "goaider",
-	Short: "A CLI aider tool for AIGC " + version.Version,
-	Long:  `A CLI aider tool for AIGC ` + version.Version + ".",
+	Use:          "goaider",
+	Short:        "A CLI aider tool for AIGC " + version.Version,
+	Long:         `A CLI aider tool for AIGC ` + version.Version + ".",
+	SilenceUsage: true,
 }
 
 func Execute() {
