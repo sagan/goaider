@@ -3,12 +3,16 @@ package util
 import (
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"log"
 	"math"
 	"os"
 	"sort"
 	"strconv"
+
+	"golang.org/x/exp/constraints"
 
 	"github.com/xxr3376/gtboard/pkg/ingest"
 )
@@ -168,4 +172,43 @@ func SaveScalarsToCSV(scalars map[string]*ingest.ScalarEvents, filename string) 
 	}
 
 	return nil
+}
+
+// Unmarshal source as json of type T
+func UnmarshalJson[T any](source []byte) (T, error) {
+	var target T
+	if err := json.Unmarshal(source, &target); err != nil {
+		return target, err
+	}
+	return target, nil
+}
+
+// Check whether a file (or dir) with name exists in file system
+func FileExists(name string) bool {
+	if _, err := os.Stat(name); err == nil || !errors.Is(err, fs.ErrNotExist) {
+		return true
+	}
+	return false
+}
+
+func ParseInt[T constraints.Integer](s string, defaultValue T) T {
+	if s != "" {
+		if i, err := strconv.Atoi(s); err == nil {
+			return T(i)
+		}
+	}
+	return defaultValue
+}
+
+// Return filtered ss. The ret is nil if and only if ss is nil.
+func FilterSlice[T any](ss []T, test func(T) bool) (ret []T) {
+	if ss != nil {
+		ret = []T{}
+	}
+	for _, s := range ss {
+		if test(s) {
+			ret = append(ret, s)
+		}
+	}
+	return
 }

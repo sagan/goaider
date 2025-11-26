@@ -108,8 +108,3 @@ func norfilenames(cmd *cobra.Command, args []string) error {
 	}
 	return nil
 }
-
-// AddCommand adds the norfilenames command to the root command.
-func AddCommand(rootCmd *cobra.Command) {
-	rootCmd.AddCommand(norfilenamesCmd)
-}
