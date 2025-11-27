@@ -54,7 +54,7 @@ func crop(cmd *cobra.Command, args []string) error {
 		finalOutput = absDir + "-crop"
 	}
 
-	if err := os.MkdirAll(finalOutput, 0755); err != nil {
+	if err := os.MkdirAll(finalOutput, 0777); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 

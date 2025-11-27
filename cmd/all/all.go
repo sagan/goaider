@@ -4,6 +4,7 @@ import (
 	_ "github.com/sagan/goaider/cmd/caption"
 	_ "github.com/sagan/goaider/cmd/crop"
 	_ "github.com/sagan/goaider/cmd/extractall"
+	_ "github.com/sagan/goaider/cmd/indexfiles"
 	_ "github.com/sagan/goaider/cmd/norfilenames"
 	_ "github.com/sagan/goaider/cmd/parsetfef"
 	_ "github.com/sagan/goaider/cmd/sovits-genlist"

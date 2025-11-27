@@ -237,5 +237,5 @@ func MakeCleanTmpDir(tmpdir string) error {
 			return err
 		}
 	}
-	return os.MkdirAll(tmpdir, 0755)
+	return os.MkdirAll(tmpdir, 0777)
 }

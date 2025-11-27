@@ -4,3 +4,9 @@
 *.exe
 /goaider
 /.local
+
+# experiment files in root dir
+/*.csv
+/*.json
+/*.txt
+/*.md
