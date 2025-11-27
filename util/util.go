@@ -214,3 +214,12 @@ func FilterSlice[T any](ss []T, test func(T) bool) (ret []T) {
 	}
 	return
 }
+
+// Map applies a function to each element of a slice and returns a new slice containing the results.
+// If input is nil, the output will also be nil.
+func Map[T1 any, T2 any](ss []T1, mapper func(T1) T2) (ret []T2) {
+	for _, s := range ss {
+		ret = append(ret, mapper(s))
+	}
+	return
+}

@@ -10,11 +10,14 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 )
+
+// name,base,ext,size,sha256
 
 type FileInfo struct {
 	Path     string         `json:"path"`      // full relative path, "foo/bar/baz.wav"
@@ -282,7 +285,8 @@ func getDeepValue(data map[string]any, path string) string {
 }
 
 // doIndex scans the directory recursively and returns a list of FileInfo
-func doIndex(dir string) (filelist FileList, err error) {
+// allowedExts: if not nil, only index these extension (no dot) files
+func doIndex(dir string, allowedExts []string) (filelist FileList, err error) {
 	filelist = make([]*FileInfo, 0)
 
 	err = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
@@ -326,6 +330,10 @@ func doIndex(dir string) (filelist FileList, err error) {
 		base := strings.TrimSuffix(fileName, ext)
 		extNoDot := strings.TrimPrefix(ext, ".")
 
+		if allowedExts != nil && !slices.Contains(allowedExts, extNoDot) {
+			return nil
+		}
+
 		// 3. Time Metadata
 		mTime := info.ModTime()
 
@@ -347,6 +355,7 @@ func doIndex(dir string) (filelist FileList, err error) {
 			Size:     info.Size(),
 			Mtime:    mTime,
 			Sha256:   hash,
+			Data:     map[string]any{},
 		}
 
 		filelist = append(filelist, fi)
