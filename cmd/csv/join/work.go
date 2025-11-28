@@ -75,7 +75,8 @@ func readCsv(filePath, joinKey, prefix string) (*csvContent, error) {
 }
 
 // Read two csv files, "join" them and output a new csv.
-// It's similar to SQL left join semantic.
+// It's similar to SQL left join semantic, but for each left csv row,
+// at most one (1) matched right csv row is allowed; if multiple right row match, use the first one.
 // The result csv contains all rows & columns of left join, along with columns of right csv
 // when leftCsv.leftOn field == rightCsv.rightOn field (must not be empty string).
 // If a same column name exists in both left and right csv, use the left version as output csv column value.
@@ -168,7 +169,10 @@ func joinCsvFiles(leftCsvFile, rightCsvFile string, output io.Writer,
 
 		if matches, ok := rightMap[joinKey]; ok && joinKey != "" {
 			// Matched rows: create a joined row for each match
-			for _, rRow := range matches {
+			for i, rRow := range matches {
+				if i > 0 {
+					break // only use the first right match row
+				}
 				rRow.used = true // Mark as used for full join logic
 
 				joinedRow := append([]string{}, lRow...) // Start with left data

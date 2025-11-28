@@ -13,9 +13,12 @@ import (
 var joinCmd = &cobra.Command{
 	Use:   "join <left.csv> <right.csv>",
 	Short: "merge (left join) two csv",
-	Long:  `merge (left join) two csv.`,
-	Args:  cobra.ExactArgs(2),
-	RunE:  join,
+	Long: `merge (left join) two csv.
+	
+By default it uses left join. But for each left csv row, at most one (1) right csv row is allowed;
+If multiple right csv rows match, only first one is used; this is different from SQL left join.`,
+	Args: cobra.ExactArgs(2),
+	RunE: join,
 }
 
 var (
