@@ -11,9 +11,11 @@ import (
 )
 
 var joinCmd = &cobra.Command{
-	Use:   "join <left.csv> <right.csv>",
+	Use:   "join --on <on_field> <left.csv> <right.csv>",
 	Short: "merge (left join) two csv",
 	Long: `merge (left join) two csv.
+
+output merged csv to stdout by default.
 	
 By default it uses left join. But for each left csv row, at most one (1) right csv row is allowed;
 If multiple right csv rows match, only first one is used; this is different from SQL left join.`,

@@ -14,27 +14,27 @@ import (
 )
 
 var (
-	flagPrefix     string
 	flagForce      bool
 	flagReadTxt    bool
+	flagPrefix     string
+	flagOutput     string
 	flagIncludes   []string
 	flagExtensions []string
 )
 
 // indexfilesCmd represents the norfilenames command
 var indexfilesCmd = &cobra.Command{
-	Use:   "indexfiles <dir> <output_file>",
+	Use:   "indexfiles <dir>",
 	Short: "Index files in a directory.",
-	Long: `Index files in a directory.
-
-<output_file> : set to "-" to output to stdout.`,
-	Args: cobra.ExactArgs(2),
-	RunE: indexfiles,
+	Long:  `Index files in a directory.`,
+	Args:  cobra.ExactArgs(1),
+	RunE:  indexfiles,
 }
 
 func init() {
 	cmd.RootCmd.AddCommand(indexfilesCmd)
 	indexfilesCmd.Flags().StringVarP(&flagPrefix, "prefix", "", "", `Output data fields name prefix`)
+	indexfilesCmd.Flags().StringVarP(&flagOutput, "output", "o", "-", `Output file path. Use "-" for stdout.`)
 	indexfilesCmd.Flags().StringSliceVarP(&flagIncludes, "includes", "", nil, "Includes fields, comma-separated")
 	indexfilesCmd.Flags().StringSliceVarP(&flagExtensions, "extensions", "", nil, "Only Index file of extensions, comma-separated")
 	indexfilesCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Force overwriting without confirmation")
@@ -43,7 +43,6 @@ func init() {
 
 func indexfiles(cmd *cobra.Command, args []string) (err error) {
 	argInput := args[0]
-	argOutput := args[1]
 	flagPrefix = strings.TrimSuffix(flagPrefix, "_")
 	flagExtensions = util.Map(flagExtensions, func(ext string) string { return strings.TrimPrefix(ext, ".") })
 
@@ -74,13 +73,13 @@ func indexfiles(cmd *cobra.Command, args []string) (err error) {
 	}
 
 	var output *os.File
-	if argOutput == "-" {
+	if flagOutput == "-" {
 		output = os.Stdout
 	} else {
-		if exists, err := util.FileExists(argOutput); err != nil || (exists && !flagForce) {
-			return fmt.Errorf("output file %q exists or can't access, err=%w", argOutput, err)
+		if exists, err := util.FileExists(flagOutput); err != nil || (exists && !flagForce) {
+			return fmt.Errorf("output file %q exists or can't access, err=%w", flagOutput, err)
 		}
-		output, err = os.Create(argOutput)
+		output, err = os.Create(flagOutput)
 		if err != nil {
 			return err
 		}

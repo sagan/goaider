@@ -75,31 +75,32 @@ Bad example: "young girl, pink puffer jacket, fur collar, black pants, slippers,
 
 // Flag variables to store command line arguments
 var (
-	flagDir      string
 	flagForce    bool
 	flagIdentity string
 	flagModel    string
 )
 
 var captionCmd = &cobra.Command{
-	Use:   "caption",
+	Use:   "caption <dir>",
 	Short: "Generate captions for images in a directory",
 	Long:  `This command generates captions for all images in a specified directory using the Gemini API.`,
+	Args:  cobra.ExactArgs(1),
 	RunE:  caption,
 }
 
 func init() {
 	cmd.RootCmd.AddCommand(captionCmd)
-	// Refactored to use Var functions to bind flags to package-level variables
-	captionCmd.Flags().StringVar(&flagDir, "dir", "", "Required: Path to the image directory")
-	captionCmd.Flags().BoolVar(&flagForce, "force", false, "Optional: Force re-generation of all captions, even if .txt files exist")
-	captionCmd.Flags().StringVar(&flagIdentity, "identity", "", "Optional: The trigger word (e.g., 'foobar' or 'photo of foobar') to prepend to each caption")
-	captionCmd.Flags().StringVarP(&flagModel, "model", "", constants.DEFAULT_GEMINI_MODEL, "The model to use for captioning")
-
-	captionCmd.MarkFlagRequired("dir")
+	captionCmd.Flags().BoolVarP(&flagForce, "force", "", false,
+		"Optional: Force re-generation of all captions, even if .txt files exist")
+	captionCmd.Flags().StringVarP(&flagIdentity, "identity", "", "",
+		"Optional: The trigger word (e.g., 'foobar' or 'photo of foobar') to prepend to each caption")
+	captionCmd.Flags().StringVarP(&flagModel, "model", "", constants.DEFAULT_GEMINI_MODEL,
+		"The model to use for captioning")
 }
 
 func caption(cmd *cobra.Command, args []string) error {
+	argDir := args[0]
+
 	// 1. Get API Key from environment
 	apiKey := os.Getenv(constants.ENV_GEMINI_API_KEY)
 	if apiKey == "" {
@@ -107,12 +108,12 @@ func caption(cmd *cobra.Command, args []string) error {
 	}
 
 	// 3. Read the specified directory
-	files, err := os.ReadDir(flagDir)
+	files, err := os.ReadDir(argDir)
 	if err != nil {
-		return fmt.Errorf("failed to read directory %s: %w", flagDir, err)
+		return fmt.Errorf("failed to read directory %s: %w", argDir, err)
 	}
 
-	fmt.Printf("Starting captioning for images in: %s\n", flagDir)
+	fmt.Printf("Starting captioning for images in: %s\n", argDir)
 	if flagForce {
 		fmt.Printf("FORCE flag set: Re-generating all captions.\n")
 	}
@@ -130,7 +131,7 @@ func caption(cmd *cobra.Command, args []string) error {
 			continue // Skip directories and non-image files
 		}
 
-		fullPath := filepath.Join(flagDir, file.Name())
+		fullPath := filepath.Join(argDir, file.Name())
 
 		// processImage does all the work: API call, retries, and file saving
 		err := processImage(client, fullPath, apiKey, flagForce, flagIdentity)

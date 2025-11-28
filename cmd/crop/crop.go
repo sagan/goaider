@@ -17,7 +17,6 @@ import (
 
 // Flag variables to store command line arguments
 var (
-	flagDir       string
 	flagOutputDir string
 	flagWidth     int
 	flagHeight    int
@@ -25,31 +24,30 @@ var (
 )
 
 var cropCmd = &cobra.Command{
-	Use:   "crop",
+	Use:   "crop <dir>",
 	Short: "Crop and resize images in a directory",
 	Long:  `This command crops and resizes all images in a specified directory using smartcrop.`,
+	Args:  cobra.ExactArgs(1),
 	RunE:  crop,
 }
 
 func init() {
 	cmd.RootCmd.AddCommand(cropCmd)
-
-	// Bind flags to variables using StringVar, IntVar, BoolVar
-	cropCmd.Flags().StringVar(&flagDir, "dir", "", "Required: Path to the image directory")
-	cropCmd.Flags().StringVar(&flagOutputDir, "output", "", "Optional: output dir name. default to \"<input-dir>-crop\"")
-	cropCmd.Flags().IntVar(&flagWidth, "width", 1024, "Optional: target photo width. default: 1024.")
-	cropCmd.Flags().IntVar(&flagHeight, "height", 1024, "Optional: target photo height. default: 1024.")
-	cropCmd.Flags().BoolVar(&flagForce, "force", false, "Optional: Process and generate the target output file even if the file already exists.")
-	cropCmd.MarkFlagRequired("dir")
+	cropCmd.Flags().StringVarP(&flagOutputDir, "output", "o", "", "Optional: output dir name. default to \"<input-dir>-crop\"")
+	cropCmd.Flags().IntVarP(&flagWidth, "width", "", 1024, "Optional: target photo width. default: 1024.")
+	cropCmd.Flags().IntVarP(&flagHeight, "height", "", 1024, "Optional: target photo height. default: 1024.")
+	cropCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Optional: Process and generate the target output file even if the file already exists.")
 }
 
 func crop(cmd *cobra.Command, args []string) error {
+	argDir := args[0]
+
 	// Logic: specific output directory calculation
 	finalOutput := flagOutputDir
 	if finalOutput == "" {
-		absDir, err := filepath.Abs(flagDir)
+		absDir, err := filepath.Abs(argDir)
 		if err != nil {
-			return fmt.Errorf("failed to resolve path %s: %w", flagDir, err)
+			return fmt.Errorf("failed to resolve path %s: %w", argDir, err)
 		}
 		finalOutput = absDir + "-crop"
 	}
@@ -58,9 +56,9 @@ func crop(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
-	files, err := os.ReadDir(flagDir)
+	files, err := os.ReadDir(argDir)
 	if err != nil {
-		return fmt.Errorf("failed to read directory %s: %w", flagDir, err)
+		return fmt.Errorf("failed to read directory %s: %w", argDir, err)
 	}
 
 	errorCnt := 0
@@ -69,7 +67,7 @@ func crop(cmd *cobra.Command, args []string) error {
 			continue
 		}
 
-		inputPath := filepath.Join(flagDir, file.Name())
+		inputPath := filepath.Join(argDir, file.Name())
 		outputPath := filepath.Join(finalOutput, file.Name())
 
 		if !flagForce {

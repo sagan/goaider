@@ -2,6 +2,7 @@
 package helper
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -238,4 +239,107 @@ func MakeCleanTmpDir(tmpdir string) error {
 		}
 	}
 	return os.MkdirAll(tmpdir, 0777)
+}
+
+// Read input file, process it using custom function and output the result.
+// Both input or output argument can be filenames, or "-" for stdin / stdout.
+// The input argument must not be empty.
+// If output argument is empty, it defaults to input if input is not "-" (meaning update input file in place),
+// or if input is "-", defaults to "-" (stdout).
+// If output is an existing file and force is false, return an error;
+// it includes the case that input is file and the original output is empty so output defaults to intput.
+// If output is filename, it first save output to a temp file, then rename / replace the temp file with target name.
+//
+// Arguments:
+// - input: Filename or "-" for stdin. Must not be empty.
+// - output: Filename or "-" for stdout.
+// - processor: Function that reads from r and writes to w.
+// - force: If true, allows overwriting existing output files.
+func InputFileAndOutput(input, output string, force bool, processor func(r io.Reader, w io.Writer,
+	inputName, outputNme string) error) error {
+	if input == "" {
+		return errors.New("input argument must not be empty")
+	}
+
+	// 1. Determine Output Defaults
+	if output == "" {
+		if input == "-" {
+			output = "-"
+		} else {
+			output = input // In-place update
+		}
+	}
+
+	// 2. Check Overwrite Safety (skip for stdout)
+	if output != "-" {
+		_, err := os.Stat(output)
+		if err == nil {
+			// File exists
+			if !force {
+				return fmt.Errorf("output file '%s' exists; use force to overwrite", output)
+			}
+		} else if !os.IsNotExist(err) {
+			// Access error (e.g., permissions)
+			return err
+		}
+	}
+
+	// 3. Open Input Stream
+	var reader io.Reader
+	if input == "-" {
+		reader = os.Stdin
+	} else {
+		f, err := os.Open(input)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		reader = f
+	}
+
+	// 4. Setup Output Stream & Temp File Logic
+	var writer io.Writer
+	var tempFile *os.File
+	var err error
+
+	if output == "-" {
+		writer = os.Stdout
+	} else {
+		// FILE OUTPUT: Always write to a temp file first for safety/atomicity
+		// We create the temp file in the same directory to ensure os.Rename works (atomic move)
+		tempFile, err = os.CreateTemp(filepath.Dir(output), ".tmp*."+filepath.Base(output))
+		if err != nil {
+			return fmt.Errorf("failed to create temp file: %w", err)
+		}
+
+		// Clean up temp file if we return with an error before renaming
+		defer func() {
+			if tempFile != nil {
+				tempFile.Close()
+				os.Remove(tempFile.Name())
+			}
+		}()
+
+		writer = tempFile
+	}
+
+	// 5. Run the Processor
+	if err := processor(reader, writer, input, output); err != nil {
+		return err
+	}
+
+	// 6. Finalize File Output (if applicable)
+	if tempFile != nil {
+		tempName := tempFile.Name()
+		// Must close explicitly before renaming (critical for Windows)
+		tempFile.Close()
+		tempFile = nil // Set to nil so the deferred cleanup doesn't delete it
+
+		// Atomic replace
+		if err := os.Rename(tempName, output); err != nil {
+			return fmt.Errorf("failed to overwrite file: %w", err)
+		}
+	}
+
+	return nil
 }
