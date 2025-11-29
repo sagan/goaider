@@ -25,8 +25,8 @@ var (
 var extractallCmd = &cobra.Command{
 	Use:     "extractall <input_dir | archive_file>",
 	Aliases: []string{"extract"},
-	Short:   "Extract all archive files.",
-	Long:    `Extract all archive files.`,
+	Short:   "Extract all archive files in the dir",
+	Long:    `Extract all archive files in the dir.`,
 	Args:    cobra.ExactArgs(1),
 	RunE:    extractall,
 }
@@ -36,16 +36,17 @@ func init() {
 	extractallCmd.Flags().StringVarP(&flagOutput, "output", "o", ".",
 		`Output directory for extracted files. Set to "-" to extract to input dir`)
 	extractallCmd.Flags().BoolVarP(&flagStrictFilenameEncodingDetection, "strict-filename-encoding-detection",
-		"", false, "Use strict zip filename encoding detection mode.")
+		"", false, "Use strict zip filename encoding detection mode")
 	extractallCmd.Flags().StringArrayVarP(&flagPasswords, "password", "p", []string{},
-		"Password to try for encrypted archives. Can provide multiple values.")
+		"Password(s) to try for encrypted archives. Can be set multiple values")
 	extractallCmd.Flags().StringVarP(&flagSevenzipBinary, "sevenzip-binary", "", "",
 		`7z.exe / 7z binary file name or path. If 7z binary exists in PATH, use that automatically, unless it's set to "`+
 			constants.NONE+`"`)
 	extractallCmd.Flags().BoolVarP(&flagCreateArchiveNameFolder, "create-archive-name-folder", "", false,
 		"Always create folder for each archive, use archive file base name (foo.rar => foo) as folder name")
 	extractallCmd.Flags().StringVarP(&flagZipFilenameEncoding, "zip-filename-encoding", "", "",
-		`Manually set (do not auto detect) zip filename encoding. Common encodings: "UTF-8","Shift_JIS", "GB-18030","EUC-KR", "EUC-JP", "Big5"`)
+		`Manually set (do not auto detect) zip filename encoding. `+
+			`Common encodings: "UTF-8", "Shift_JIS", "GB-18030", "EUC-KR", "EUC-JP", "Big5"`)
 }
 
 func extractall(cmd *cobra.Command, args []string) (err error) {

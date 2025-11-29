@@ -11,25 +11,30 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/spf13/cobra"
-
 	"github.com/Masterminds/sprig/v3"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mithrandie/csvq-driver"
+	"github.com/spf13/cobra"
 
 	csvCmd "github.com/sagan/goaider/cmd/csv"
 	"github.com/sagan/goaider/util"
+	"github.com/sagan/goaider/util/stringutil"
 )
 
 var joinCmd = &cobra.Command{
 	Use:   "query <sql>",
-	Short: "query csv files",
-	Long: `query csv files using csvq ( https://github.com/mithrandie/csvq ).
+	Short: "Run SQL query on csv files",
+	Long: `Run SQL query on csv files.
+
+It uses csvq ( https://github.com/mithrandie/csvq ).
+
 Output query result as csv.
 
 Examples:
 - goaider csv query "select * from foo" # query "foo.csv"
 ` + "- goaider csv query 'select * from `foo-bar.csv` limit 10'" + `
+
+The output csv has header line unless --no-header is set.
 
 Note:
 - If an identifier name, such as filename (table name) or column name includes any special char (like "." or "-"),
@@ -37,7 +42,7 @@ Note:
 - In Linux bash, if query contains backticks, to prevent interpretion of backticks as cmd,
   the argument must be wrapped in single quotes.
 - Filename extension can be omitted in sql table if only "<filename>.csv" but not "<filename>" file exists.
-- Literal strings in sql should be wrapped use double quotes.`,
+- Literal strings in sql should be wrapped in double quotes.`,
 	Args: cobra.ExactArgs(1),
 	RunE: query,
 }
@@ -46,6 +51,7 @@ var (
 	flagDir      string // csv files dir. defaults to ".".
 	flagTemplate string // Go text template string.
 	flagText     bool   // output plain text.
+	flagOneLine  bool   // force each csv row outputs only one line
 )
 
 func query(cmd *cobra.Command, args []string) (err error) {
@@ -86,9 +92,9 @@ func query(cmd *cobra.Command, args []string) (err error) {
 	}
 
 	if flagText {
-		err = writeSqlRowsToText(rows, output, flagTemplate)
+		err = writeSqlRowsToText(rows, output, flagTemplate, flagOneLine)
 	} else {
-		err = writeSqlRowsToCsv(rows, output)
+		err = writeSqlRowsToCsv(rows, output, csvCmd.FlagNoHeader, flagOneLine)
 	}
 	if err != nil {
 		return err
@@ -102,15 +108,18 @@ func init() {
 	joinCmd.Flags().StringVarP(&flagDir, "dir", "d", ".", "CSV files directory")
 	joinCmd.Flags().StringVarP(&flagTemplate, "template", "t", "",
 		`Go text template string to format output. If set, --text is implied. Example: '{{.col1}},{{.col2}}'. `+
-			`Sprig (v3) functions are supported, see https://github.com/Masterminds/sprig .`)
+			`Sprig (v3) functions are supported, see https://github.com/Masterminds/sprig`)
 	joinCmd.Flags().BoolVarP(&flagText, "text", "", false,
 		`Output as plain text instead of CSV. No header line is written. If --template is set, this is implied. `+
-			`The --template is required unless query result has only one (1) column, in which case it's written directly.`)
+			`The --template is required unless query result has only one (1) column, in which case it's written directly`)
+	joinCmd.Flags().BoolVarP(&flagOneLine, "one-line", "", false,
+		`Force each csv row outputs only one line. This is useful when a field contains newlines. `+
+			`It replaces one or more consecutive newline characters (\r, \n) with single space`)
 }
 
 // writeSqlRowsToCsv writes the result of a sql query to a CSV writer.
 // It sorts the columns alphabetically by name in the output.
-func writeSqlRowsToCsv(rows *sql.Rows, csvOutput io.Writer) error {
+func writeSqlRowsToCsv(rows *sql.Rows, csvOutput io.Writer, noHeader bool, oneLine bool) error {
 	// 1. Get the original column names from the query result
 	cols, err := rows.Columns()
 	if err != nil {
@@ -141,19 +150,21 @@ func writeSqlRowsToCsv(rows *sql.Rows, csvOutput io.Writer) error {
 	defer writer.Flush()
 
 	// 5. Write the Header (using the sorted order)
-	header := make([]string, len(cols))
-	for i, m := range mapping {
-		header[i] = m.Name
-	}
-	if err := writer.Write(header); err != nil {
-		return fmt.Errorf("failed to write header: %w", err)
+	if !noHeader {
+		header := make([]string, len(cols))
+		for i, m := range mapping {
+			header[i] = m.Name
+		}
+		if err := writer.Write(header); err != nil {
+			return fmt.Errorf("failed to write header: %w", err)
+		}
 	}
 
 	// 6. Prepare buffers for scanning rows
 	// values: holds the data scanned from the database (in original order)
 	// scanArgs: pointers to 'values' required by rows.Scan
-	values := make([]interface{}, len(cols))
-	scanArgs := make([]interface{}, len(cols))
+	values := make([]any, len(cols))
+	scanArgs := make([]any, len(cols))
 	for i := range values {
 		scanArgs[i] = &values[i]
 	}
@@ -185,6 +196,9 @@ func writeSqlRowsToCsv(rows *sql.Rows, csvOutput io.Writer) error {
 			}
 			// If val is nil, strVal remains "" (empty string)
 
+			if oneLine {
+				strVal = stringutil.ReplaceNewLinesWithSpace(strVal)
+			}
 			rowString[sortedIdx] = strVal
 		}
 
@@ -206,7 +220,7 @@ func writeSqlRowsToCsv(rows *sql.Rows, csvOutput io.Writer) error {
 // Each row is a line formatted by the provided template string.
 // If the rendered line is empty (after trimming), the row is skipped.
 // Special case: if rows has 1 column and template is empty, the column value is written directly.
-func writeSqlRowsToText(rows *sql.Rows, output io.Writer, templateStr string) error {
+func writeSqlRowsToText(rows *sql.Rows, output io.Writer, templateStr string, oneLine bool) error {
 	cols, err := rows.Columns()
 	if err != nil {
 		return fmt.Errorf("failed to get columns: %w", err)
@@ -276,6 +290,9 @@ func writeSqlRowsToText(rows *sql.Rows, output io.Writer, templateStr string) er
 			line = buf.String()
 		}
 
+		if oneLine {
+			line = stringutil.ReplaceNewLinesWithSpace(line)
+		}
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue

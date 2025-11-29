@@ -7,8 +7,8 @@ import (
 
 var CsvCmd = &cobra.Command{
 	Use:   "csv",
-	Short: "csv file operations",
-	Long:  `csv file operations.`,
+	Short: "CSV file operations",
+	Long:  `CSV file operations.`,
 }
 
 var (
@@ -20,7 +20,8 @@ var (
 func init() {
 	cmd.RootCmd.AddCommand(CsvCmd)
 	CsvCmd.PersistentFlags().BoolVarP(&FlagNoHeader, "no-header", "n", false,
-		`Treat input csv files as no header row. Columns implicit to "c1", "c2"...`)
+		`Treat input csv files as no header row. Columns implicit to "c1", "c2"...; `+
+			`If it's set, the output csv of most sub-commands (except "join" cmd) is also no-header.`)
 	CsvCmd.PersistentFlags().BoolVarP(&FlagForce, "force", "", false, "Force overwriting files without confirmation.")
 	CsvCmd.PersistentFlags().StringVarP(&FlagOutput, "output", "o", "-",
 		`Output file path (if applicable). Use "-" for stdout.`)

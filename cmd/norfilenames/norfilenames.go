@@ -6,34 +6,36 @@ import (
 	"path/filepath"
 	"regexp"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"github.com/sagan/goaider/cmd"
+	"github.com/sagan/goaider/util/helper"
 )
 
 var (
-	flagDir   string
 	flagForce bool
 )
 
 // norfilenamesCmd represents the norfilenames command
 var norfilenamesCmd = &cobra.Command{
-	Use:   "norfilenames",
+	Use:   "norfilenames <dir>",
+	Args:  cobra.ExactArgs(1),
 	Short: "Normalize filenames in a directory",
-	Long: `The norfilenames command normalizes all filenames within a specified directory.
+	Long: `Normalize filenames in a directory.
+
 It replaces special characters (like #, $, %, etc.) in filenames with underscores (_).`,
 	RunE: norfilenames,
 }
 
 func init() {
 	cmd.RootCmd.AddCommand(norfilenamesCmd)
-	norfilenamesCmd.Flags().StringVarP(&flagDir, "dir", "", "", "Directory to normalize filenames in")
 	norfilenamesCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Force renaming without confirmation")
-	norfilenamesCmd.MarkFlagRequired("dir")
 }
 
 func norfilenames(cmd *cobra.Command, args []string) error {
-	fmt.Printf("Normalizing filenames in directory: %s\n", flagDir)
+	argDir := args[0]
+	log.Printf("Normalizing filenames in directory: %s", argDir)
 
 	type renamePair struct {
 		oldPath string
@@ -43,7 +45,7 @@ func norfilenames(cmd *cobra.Command, args []string) error {
 	}
 	var pendingRenames []renamePair
 
-	err := filepath.Walk(flagDir, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(argDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -71,38 +73,31 @@ func norfilenames(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(pendingRenames) == 0 {
-		fmt.Println("No filenames need normalization.")
+		log.Printf("No filenames need normalization.")
 		return nil
 	}
 
-	fmt.Println("\nPending renamings:")
+	log.Printf("Pending renamings:")
 	for _, rp := range pendingRenames {
-		fmt.Printf("  '%s' -> '%s'\n", rp.oldName, rp.newName)
+		fmt.Fprintf(os.Stderr, "  '%s' -> '%s'\n", rp.oldName, rp.newName)
 	}
 
-	if !flagForce {
-		fmt.Print("Proceed with renaming? (y/N): ")
-		var confirmation string
-		fmt.Scanln(&confirmation)
-		if confirmation != "y" && confirmation != "Y" && confirmation != "yes" && confirmation != "YES" {
-			fmt.Printf("Renaming cancelled.\n")
-			return nil
-		}
+	if !flagForce && !helper.AskYesNoConfirm("Proceed with renaming") {
+		return fmt.Errorf("abort")
 	}
 
-	fmt.Printf("\n")
-	fmt.Printf("Performing renamings...\n")
+	log.Printf("Performing renamings...")
 	errorCnt := 0
 	for _, rp := range pendingRenames {
 		if err := os.Rename(rp.oldPath, rp.newPath); err != nil {
-			fmt.Printf("Error renaming %q: %v\n", rp.oldName, err)
+			log.Printf("Error renaming %q: %v", rp.oldName, err)
 			errorCnt++
 		} else {
-			fmt.Printf("Renamed %q to %q\n", rp.oldName, rp.newName)
+			log.Printf("Renamed %q to %q", rp.oldName, rp.newName)
 		}
 	}
 
-	fmt.Printf("Filename normalization complete.\n")
+	log.Printf("Filename normalization complete.")
 	if errorCnt > 0 {
 		return fmt.Errorf("%d errors", errorCnt)
 	}

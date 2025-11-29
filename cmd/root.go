@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/sagan/goaider/version"
 	"github.com/spf13/cobra"
+
+	"github.com/sagan/goaider/version"
 )
 
 var RootCmd = &cobra.Command{

@@ -124,3 +124,11 @@ func PrintStringInWidth(output io.Writer, str string, width int, padRight bool) 
 	fmt.Fprint(output, pstr)
 	return
 }
+
+// /[\r\n]+/
+var newLinesRegex = regexp.MustCompile(`[\r\n]+`)
+
+// Replace one or more consecutive newline characters (\r, \n) with single space.
+func ReplaceNewLinesWithSpace(str string) string {
+	return newLinesRegex.ReplaceAllString(str, " ")
+}

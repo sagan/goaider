@@ -56,17 +56,21 @@ func uniqCsvFile(csvInput io.Reader, keyField string, output, duplicateRowsOutpu
 
 	// 4. Setup Writers
 	wOut := csv.NewWriter(output)
-	// Write header to main output
-	if err := wOut.Write(header); err != nil {
-		return 0, fmt.Errorf("failed to write header to output: %w", err)
+	if !noHeader {
+		// Write header to main output
+		if err := wOut.Write(header); err != nil {
+			return 0, fmt.Errorf("failed to write header to output: %w", err)
+		}
 	}
 
 	var wDup *csv.Writer
 	if duplicateRowsOutput != nil {
 		wDup = csv.NewWriter(duplicateRowsOutput)
-		// Write header to duplicates output
-		if err := wDup.Write(header); err != nil {
-			return 0, fmt.Errorf("failed to write header to duplicate output: %w", err)
+		if !noHeader {
+			// Write header to duplicates output
+			if err := wDup.Write(header); err != nil {
+				return 0, fmt.Errorf("failed to write header to duplicate output: %w", err)
+			}
 		}
 	}
 

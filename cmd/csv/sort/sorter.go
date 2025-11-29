@@ -68,9 +68,10 @@ func sortCsvFile(input io.Reader, keyField string, output io.Writer, noHeader bo
 	// 5. Write to output
 	w := csv.NewWriter(output)
 
-	// Note: We write the header even if noHeader was true, matching joinCsvFiles behavior.
-	if err := w.Write(header); err != nil {
-		return fmt.Errorf("failed to write header: %w", err)
+	if !noHeader {
+		if err := w.Write(header); err != nil {
+			return fmt.Errorf("failed to write header: %w", err)
+		}
 	}
 	if err := w.WriteAll(data); err != nil {
 		return fmt.Errorf("failed to write data: %w", err)

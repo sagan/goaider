@@ -3,9 +3,9 @@ package uniq
 import (
 	"fmt"
 	"io"
-	"log"
 	"os"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"github.com/sagan/goaider/cmd/csv"
@@ -14,8 +14,8 @@ import (
 
 var uniqCmd = &cobra.Command{
 	Use:   "uniq --key <key_field> <input.csv | ->",
-	Short: "uniquify csv file to remove duplicate rows.",
-	Long: `uniquify csv file to remove duplicate rows.
+	Short: "Uniquify csv file to remove duplicate rows",
+	Long: `Uniquify csv file to remove duplicate rows.
 
 Output to stdout by default. If --inplace is set, update input file in place.
 
@@ -93,7 +93,7 @@ func init() {
 	uniqCmd.Flags().BoolVarP(&flagCheck, "check", "c", false,
 		"Check mode: do not output anything, exit 0 if csv has no duplicate rows, 1 if has duplicate rows")
 	uniqCmd.Flags().StringVarP(&flagKey, "key", "k", "", `(Required) Key field`)
-	uniqCmd.Flags().BoolVarP(&flagInplace, "inplace", "", false, `Update input file in place.`)
+	uniqCmd.Flags().BoolVarP(&flagInplace, "inplace", "", false, `Update input file in place`)
 	uniqCmd.MarkFlagRequired("key")
 	csv.CsvCmd.AddCommand(uniqCmd)
 }

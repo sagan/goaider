@@ -1,12 +1,14 @@
 package indexfiles
 
 import (
+	"bytes"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"github.com/sagan/goaider/cmd"
@@ -15,30 +17,67 @@ import (
 
 var (
 	flagForce      bool
-	flagReadTxt    bool
 	flagPrefix     string
 	flagOutput     string
 	flagIncludes   []string
 	flagExtensions []string
+	flagMetas      []string // custom meta files of "metaName:metaSuffix" format
 )
 
 // indexfilesCmd represents the norfilenames command
 var indexfilesCmd = &cobra.Command{
 	Use:   "indexfiles <dir>",
-	Short: "Index files in a directory.",
-	Long:  `Index files in a directory.`,
-	Args:  cobra.ExactArgs(1),
-	RunE:  indexfiles,
+	Short: "Index files in a directory",
+	Long: `Index files in a directory.
+
+It outputs a csv with these columns (alphabetically sorted):
+  base,dir_name,dir_path,ext,ext_nodot,mtime,name,path,sha256,size
+
+The Go file info struct schema:
+
+type FileInfo struct {
+	Path     string         // full relative path, "foo/bar/baz.wav"
+	Name     string         // filename, "baz.wav"
+	DirPath  string         // parent dir relative path, "foo/bar", empty if file is in root path
+	DirName  string         // parent dir name, "bar", empty if file is in root path
+	Base     string         // "baz"
+	Ext      string         // ".wav"
+	ExtNodot string         // "wav"
+	Size     int64          // 1024
+	Mtime    time.Time      // modified time. output to csv in "YYYY-MM-DDTHH:mm:ssZ" format
+	Sha256   string         // hex string (lower case)
+	Data     map[string]any // custom meta data
+}
+
+By default, the "data" field is empty map and not outputed to csv, unless the --include flag is set and
+it's value slice contains "data.txt", "data.json" or any "data.json.*", in which case it will try to read each file's
+<filename>.txt / <filename>.json meta file and store them in "data.txt" / "data.json" field,
+the former is string and the later is arbitary json type.
+The resolved values are included in output csv with column name of "data_txt", "data_json" or "data_json_*". E.g. :
+  goaider indexfiles . --inludes "base,name,size,data.txt,data.json.field_foo"
+You can also define custom meta files use --meta flag.
+
+The outputed index only contains normal files, no folders.`,
+	Args: cobra.ExactArgs(1),
+	RunE: indexfiles,
 }
 
 func init() {
 	cmd.RootCmd.AddCommand(indexfilesCmd)
-	indexfilesCmd.Flags().StringVarP(&flagPrefix, "prefix", "", "", `Output data fields name prefix`)
-	indexfilesCmd.Flags().StringVarP(&flagOutput, "output", "o", "-", `Output file path. Use "-" for stdout.`)
-	indexfilesCmd.Flags().StringSliceVarP(&flagIncludes, "includes", "", nil, "Includes fields, comma-separated")
-	indexfilesCmd.Flags().StringSliceVarP(&flagExtensions, "extensions", "", nil, "Only Index file of extensions, comma-separated")
 	indexfilesCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Force overwriting without confirmation")
-	indexfilesCmd.Flags().BoolVarP(&flagReadTxt, "read-txt", "", false, `Read *.txt file contents and store it in data.txt`)
+	indexfilesCmd.Flags().StringVarP(&flagPrefix, "prefix", "", "", `Output data fields name prefix`)
+	indexfilesCmd.Flags().StringVarP(&flagOutput, "output", "o", "-", `Output file path. Use "-" for stdout`)
+	indexfilesCmd.Flags().StringSliceVarP(&flagIncludes, "includes", "", nil, `Includes fields, comma-separated. `+
+		`Special values: "data.txt", "data.json", "data.json.*", "data.*". `+
+		`The "*" means all but "data" fields; it's also the default value if this flag is not set`)
+	indexfilesCmd.Flags().StringSliceVarP(&flagExtensions, "extensions", "", nil,
+		"Only Index file of extensions, comma-separated")
+	indexfilesCmd.Flags().StringArrayVarP(&flagMetas, "meta", "", nil,
+		`Custom meta files of "metaName:metaSuffix" format. E.g. "mytextmeta:.txt", "myjsonmeta:@.json". `+
+			`The metaName is used in --includes flag, e.g. "data.mytextmeta". `+
+			`The metaSuffix is used to locate the meta file. `+
+			`If metaSuffix starts with "@", it means "<filename>.<ext><metaSuffix>", otherwise "<filename><metaSuffix>". `+
+			`E.g. for "foo.wav", "@.txt" means "foo.wav.txt", ".txt" means "foo.txt". Can be set multiple times`)
 }
 
 func indexfiles(cmd *cobra.Command, args []string) (err error) {
@@ -50,25 +89,59 @@ func indexfiles(cmd *cobra.Command, args []string) (err error) {
 	if err != nil {
 		return err
 	}
+
+	// metaName => metaSuffix
+	var metas = map[string]string{
+		"txt":  ".txt",
+		"json": ".json",
+	}
+	for _, meta := range flagMetas {
+		parts := strings.SplitN(meta, ":", 2)
+		if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+			return fmt.Errorf(`invalid meta format: %q. Expected "metaName:metaSuffix"`, meta)
+		}
+		metas[parts[0]] = parts[1]
+	}
+	metaNames := util.Keys(metas)
+
+	// check if --includes flag is valid
+	validFields := slices.DeleteFunc(util.Values(util.GetAllJSONTags(&FileInfo{})), func(s string) bool {
+		return s == "data"
+	})
+	var includes []string
+	for _, include := range flagIncludes {
+		if include == "*" {
+			includes = append(includes, validFields...)
+			continue
+		}
+		if keys := strings.Split(include, "."); len(keys) > 1 {
+			if keys[0] != "data" || metas[keys[1]] == "" {
+				return fmt.Errorf("invalid include field %q", include)
+			}
+		} else if !slices.Contains(validFields, include) {
+			return fmt.Errorf("invalid include field %q", include)
+		}
+		includes = append(includes, include)
+	}
+	if util.HasDuplicates(includes) {
+		return fmt.Errorf("--includes flag has duplicate value(s)")
+	}
+
 	filelist, err := doIndex(inputDir, flagExtensions)
 	if err != nil {
 		return err
 	}
 
-	if flagReadTxt {
+	for _, metaName := range metaNames {
+		metaSuffix := metas[metaName]
+		if !slices.ContainsFunc(includes, func(i string) bool {
+			prefix := "data." + metaName
+			return i == prefix || strings.HasPrefix(i, prefix+".")
+		}) {
+			continue
+		}
 		for _, file := range filelist {
-			if file.ExtNodot == "txt" {
-				log.Printf("skip read txt for already txt file: %q", file.Path)
-				continue
-			}
-			txtFilePath := filepath.Join(inputDir, file.DirPath, file.Base+".txt")
-			contents, err := os.ReadFile(txtFilePath)
-			if err != nil {
-				log.Printf("failed to read txt %q: %v", txtFilePath, err)
-				continue
-			}
-			txtFileContents := string(contents)
-			file.Data["txt"] = txtFileContents
+			updateFileMeta(inputDir, file, metaName, metaSuffix)
 		}
 	}
 
@@ -86,10 +159,51 @@ func indexfiles(cmd *cobra.Command, args []string) (err error) {
 		defer output.Close()
 	}
 
-	err = filelist.SaveCsv(output, flagPrefix, flagIncludes)
+	err = filelist.SaveCsv(output, flagPrefix, includes)
 	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+// Read a metaFile for a file and store it in file.Data.
+//
+// metaFileSuffix:
+//
+//	".txt" / ".json" => <filename>.ext => <filename>.txt / <filename>.json ;
+//	"@.txt" / "@.json" => <filename>.ext => <filename>.ext.txt / <filename>.ext.json .
+//
+// If the file name ends with metaFileSuffix, skip this file.
+// If meta filename ext is .json / .yaml / .toml, it's parsed as object.
+// Otherwise it's stored as string.
+func updateFileMeta(inputDir string, file *FileInfo, metaName string, metaFileSuffix string) {
+	if strings.HasSuffix(file.Name, strings.TrimPrefix(metaFileSuffix, "@")) {
+		log.Printf("skip read %s meta for file %q", metaFileSuffix, file.Path)
+		return
+	}
+	metaFilename := ""
+	if strings.HasPrefix(metaFileSuffix, "@") {
+		metaFilename = file.Name + metaFileSuffix[1:]
+	} else {
+		metaFilename = file.Base + metaFileSuffix
+	}
+	metaFilePath := filepath.Join(inputDir, file.DirPath, metaFilename)
+	contents, err := os.ReadFile(metaFilePath)
+	if err != nil {
+		log.Printf("failed to read meta file %q: %v", metaFilePath, err)
+		return
+	}
+	metaFileExt := filepath.Ext(metaFilePath)
+	if metaFileExt == ".json" || metaFileExt == ".yaml" || metaFileExt == ".yml" || metaFileExt == ".toml" {
+		var obj any
+		obj, err = util.Unmarshal(metaFileExt, bytes.NewReader(contents))
+		if err != nil {
+			log.Printf("failed to parse .json %q: %v", metaFilePath, err)
+			return
+		}
+		file.Data[metaName] = obj
+	} else {
+		file.Data[metaName] = string(contents)
+	}
 }

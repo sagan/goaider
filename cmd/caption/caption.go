@@ -83,9 +83,11 @@ var (
 var captionCmd = &cobra.Command{
 	Use:   "caption <dir>",
 	Short: "Generate captions for images in a directory",
-	Long:  `This command generates captions for all images in a specified directory using the Gemini API.`,
-	Args:  cobra.ExactArgs(1),
-	RunE:  caption,
+	Long: `This command generates captions for all images in a specified directory using the Gemini API.
+
+It saves the caption of each image file to <filename>.txt file of the same dir.`,
+	Args: cobra.ExactArgs(1),
+	RunE: caption,
 }
 
 func init() {

@@ -12,8 +12,8 @@ import (
 
 var sortCmd = &cobra.Command{
 	Use:   "sort --key <key_field> <input.csv | ->",
-	Short: "sort csv file based on key field.",
-	Long: `sort csv file based on key field.
+	Short: "Sort csv file based on key field",
+	Long: `Sort csv file based on key field.
 
 Output to stdout by default. If --inplace is set, update input file in place.
 Use "-" as input arg to read from stdin.`,
@@ -52,8 +52,8 @@ func sortFunc(cmd *cobra.Command, args []string) (err error) {
 }
 
 func init() {
-	sortCmd.Flags().BoolVarP(&flagInplace, "inplace", "", false, `Update input file in place.`)
-	sortCmd.Flags().StringVarP(&flagKey, "key", "", "", `(Required) Key field.`)
+	sortCmd.Flags().BoolVarP(&flagInplace, "inplace", "", false, `Update input file in place`)
+	sortCmd.Flags().StringVarP(&flagKey, "key", "", "", `(Required) Key field`)
 	sortCmd.MarkFlagRequired("key")
 	csv.CsvCmd.AddCommand(sortCmd)
 }

@@ -15,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/sagan/goaider/util"
 )
 
 // name,base,ext,size,sha256
@@ -280,7 +282,7 @@ func getDeepValue(data map[string]any, path string) string {
 	case time.Time:
 		return val.UTC().Format("2006-01-02T15:04:05Z")
 	default:
-		return fmt.Sprintf("%v", val)
+		return util.ToJson(val)
 	}
 }
 

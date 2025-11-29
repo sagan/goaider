@@ -6,29 +6,64 @@ package exec
 // the context is the map[string]any data of each csv row.
 
 import (
-	csvCmd "github.com/sagan/goaider/cmd/csv"
+	"fmt"
+	"os"
+
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+
+	csvCmd "github.com/sagan/goaider/cmd/csv"
 )
 
 var execCmd = &cobra.Command{
 	Use:   "exec <input.csv | ->",
 	Short: "Execute a command for each line of a CSV file",
-	RunE:  doExec,
+	Long: `Execute a command for each line of a CSV file.
+
+Example:
+  goaider csv exec input.csv --template "mycmd {{.foo}}"`,
+	RunE: doExec,
+	Args: cobra.ExactArgs(1),
 }
 
 var (
-	flagDryRun   bool
-	flagTemplate string
+	flagDryRun          bool
+	flagContinueOnError bool
+	flagTemplate        string
 )
 
 func init() {
 	execCmd.Flags().StringVarP(&flagTemplate, "template", "t", "",
-		`Go template string to build the command to be executed for each row. E.g. "mycmd {{.foo}} {{.bar}}"`)
-	execCmd.Flags().BoolVarP(&flagDryRun, "dry-run", "", false, "Print the commands instead of executing them")
+		`Go template string to build the command to be executed for each row. E.g. "mycmd {{.foo}} {{.bar}}". `+
+			`Sprig (v3) functions are supported, see https://github.com/Masterminds/sprig`)
+	execCmd.Flags().BoolVarP(&flagDryRun, "dry-run", "d", false, "Print the commands instead of executing them")
+	execCmd.Flags().BoolVarP(&flagContinueOnError, "continue-on-error", "c", false,
+		"Continue executing even if an error occurs for a row "+
+			"(template render error, command execution error, or non-zero exit code)")
 	execCmd.MarkFlagRequired("template")
 	csvCmd.CsvCmd.AddCommand(execCmd)
 }
 
-func doExec(cmd *cobra.Command, args []string) error {
+func doExec(cmd *cobra.Command, args []string) (err error) {
+	argInput := args[0]
+	var input *os.File
+	if argInput == "-" {
+		input = os.Stdin
+	} else {
+		input, err = os.Open(argInput)
+		if err != nil {
+			return err
+		}
+		defer input.Close()
+	}
+	successRows, skipRows, errorRows, err := execCsv(input, flagTemplate, csvCmd.FlagNoHeader,
+		flagContinueOnError, flagDryRun)
+	log.Printf("Complete: success / skip / error rows: %d / %d / %d", successRows, skipRows, errorRows)
+	if err != nil {
+		return err
+	}
+	if errorRows > 0 {
+		return fmt.Errorf("%d rows failed", errorRows)
+	}
 	return nil
 }

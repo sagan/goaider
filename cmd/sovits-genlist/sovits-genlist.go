@@ -1,64 +1,71 @@
 package sovitsgenlist
 
 import (
-	"bufio"
 	"fmt"
-	"log"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/natefinch/atomic"
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"github.com/sagan/goaider/cmd"
+	"github.com/sagan/goaider/util"
+	"github.com/sagan/goaider/util/stringutil"
 )
 
 var (
-	flagDir     string
-	flagLang    string
 	flagForce   bool
+	flagLang    string
 	flagSpeaker string
 	flagOutput  string
+	flagExt     string
 )
 
 var genlistCmd = &cobra.Command{
-	Use:   "sovits-genlist",
-	Short: "Generates a GPT-SoVITS dataset annotation sovits.list file",
-	Long: `The sovits-genlist command generates a dataset annotation sovits.list file
+	Use:   "sovits-genlist <dir>",
+	Args:  cobra.ExactArgs(1),
+	Short: "Generates a GPT-SoVITS dataset annotation dataset .list file",
+	Long: `Generates a GPT-SoVITS dataset annotation dataset .list file.
+
+The sovits-genlist command generates a dataset annotation dataset .list file
 used by GPT-SoVITS (a voice synthesis and cloning model).
 
 It reads all "<filename>.wav" files and corresponding "<filename>.txt"
 transcription files from a specified directory, then generates a
-"sovits.list" file in that directory.
+dataset .list file to output file, which defaults to stdout.
 
 Each line in the generated .list file will have the format:
-audio_filename|speaker|language|text
+  audio_filename|speaker|language|text
 
 Example:
-foo1.wav|foo|en|I have a dream
+  clannad.wav|speaker|ja|お連れしましょうか。この街の、願いが叶う場所へ。
 
 Notes:
 - Only include a wav file record in sovits.list file if a corresponding .txt
   transcription file exists.
-- If a .txt file has multiple lines, replace new line breaks (\r\n / \n)
+- If a .txt file has multiple lines, it replace newline characters ([\r\n]+)
   with a single space.`,
 	RunE: runSovitsGenlist,
 }
 
 func init() {
-	genlistCmd.Flags().StringVarP(&flagDir, "dir", "", "", "Required. Directory containing audio & transcription files.")
-	genlistCmd.Flags().StringVarP(&flagOutput, "output", "", "sovits.list", `Output filename in target dir. Set to "-" to output to stdout`)
-	genlistCmd.Flags().StringVarP(&flagLang, "lang", "", "", "Required. The language spoken in the audio files: zh | ja | en | ko | yue.")
-	genlistCmd.Flags().BoolVarP(&flagForce, "force", "", false, `Force re-generate "sovits.list" file even if it already exists.`)
-	genlistCmd.Flags().StringVarP(&flagSpeaker, "speaker", "", "", "Required. Speaker name.")
-
-	genlistCmd.MarkFlagRequired("dir")
-	genlistCmd.MarkFlagRequired("lang")
-	genlistCmd.MarkFlagRequired("speaker")
+	genlistCmd.Flags().StringVarP(&flagOutput, "output", "", "-", `Output filename. Use "-" to output to stdout`)
+	genlistCmd.Flags().StringVarP(&flagLang, "lang", "", "ja",
+		"The language spoken in the audio files: zh | ja | en | ko | yue")
+	genlistCmd.Flags().BoolVarP(&flagForce, "force", "", false, `Force overwrite output file even if it already exists`)
+	genlistCmd.Flags().StringVarP(&flagSpeaker, "speaker", "", "speaker", "Speaker name")
+	genlistCmd.Flags().StringVarP(&flagExt, "ext-transcript", "", ".txt", `Transcript file extension`)
 	cmd.RootCmd.AddCommand(genlistCmd)
 }
 
 func runSovitsGenlist(cmd *cobra.Command, args []string) error {
+	if !strings.HasPrefix(flagExt, ".") {
+		flagExt = "." + flagExt
+	}
+	argDir := args[0]
 	var err error
 	// Validate language
 	validLangs := map[string]bool{"zh": true, "ja": true, "en": true, "ko": true, "yue": true}
@@ -67,22 +74,15 @@ func runSovitsGenlist(cmd *cobra.Command, args []string) error {
 	}
 
 	// Get absolute path for the directory
-	absDirPath, err := filepath.Abs(flagDir)
+	absDirPath, err := filepath.Abs(argDir)
 	if err != nil {
-		return fmt.Errorf("failed to get absolute path for directory %q: %w", flagDir, err)
+		return fmt.Errorf("failed to get absolute path for directory %q: %w", argDir, err)
 	}
 
-	var outputFilePath string
 	if flagOutput != "-" {
-		outputFilePath = filepath.Join(absDirPath, flagOutput)
-		// Check if output file exists and if force flag is not set
-		if _, err := os.Stat(outputFilePath); err == nil && !flagForce {
-			return fmt.Errorf("output file %q already exists. Use --force to overwrite", outputFilePath)
-		} else if err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("failed to check existence of output file %q: %w", outputFilePath, err)
+		if exists, err := util.FileExists(flagOutput); err != nil || (exists && !flagForce) {
+			return fmt.Errorf("output file %q already exists or access error. err: %w", flagOutput, err)
 		}
-	} else {
-		outputFilePath = "-"
 	}
 
 	// Read directory contents
@@ -104,8 +104,8 @@ func runSovitsGenlist(cmd *cobra.Command, args []string) error {
 
 	// Second pass: process .txt files that have corresponding .wav files
 	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".txt") {
-			baseName := strings.TrimSuffix(entry.Name(), ".txt")
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), flagExt) {
+			baseName := strings.TrimSuffix(entry.Name(), flagExt)
 
 			if _, exists := wavFiles[baseName]; exists {
 				txtFilePath := filepath.Join(absDirPath, entry.Name())
@@ -115,10 +115,8 @@ func runSovitsGenlist(cmd *cobra.Command, args []string) error {
 					continue
 				}
 
-				// Replace newlines with spaces
-				text := strings.ReplaceAll(string(content), "\r\n", " ")
-				text = strings.ReplaceAll(text, "\n", " ")
-				text = strings.TrimSpace(text) // Trim leading/trailing spaces
+				text := stringutil.ReplaceNewLinesWithSpace(string(content))
+				text = strings.TrimSpace(text)
 
 				// Format the line
 				line := fmt.Sprintf("%s.wav|%s|%s|%s", baseName, flagSpeaker, flagLang, text)
@@ -131,27 +129,24 @@ func runSovitsGenlist(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no valid wav files found")
 	}
 
-	var outputFile *os.File
-	if outputFilePath != "-" {
-		// Write to output file
-		outputFile, err = os.Create(outputFilePath)
-		if err != nil {
-			return fmt.Errorf("failed to create output file %q: %w", outputFilePath, err)
+	reader, writer := io.Pipe()
+	go func() {
+		for _, line := range listLines {
+			_, err := writer.Write([]byte(line + "\n"))
+			if err != nil {
+				writer.CloseWithError(fmt.Errorf("failed to write line to output: %w", err))
+				return
+			}
 		}
-		defer outputFile.Close()
+		writer.Close()
+	}()
+	if flagOutput != "-" {
+		err = atomic.WriteFile(flagOutput, reader)
 	} else {
-		outputFile = os.Stdout
+		_, err = io.Copy(os.Stdout, reader)
 	}
-
-	writer := bufio.NewWriter(outputFile)
-	for _, line := range listLines {
-		_, err := writer.WriteString(line + "\n")
-		if err != nil {
-			return fmt.Errorf("failed to write line to output file: %w", err)
-		}
+	if err != nil {
+		return fmt.Errorf("failed to output to %q : %w", flagOutput, err)
 	}
-	writer.Flush()
-
-	log.Printf("Successfully generated GPT-SoVITS list file: %q", outputFilePath)
 	return nil
 }

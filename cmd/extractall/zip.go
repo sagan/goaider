@@ -7,9 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/sagan/zip"
+
 	"github.com/sagan/goaider/util/pathutil"
 	"github.com/sagan/goaider/util/stringutil"
-	"github.com/sagan/zip"
 )
 
 // See https://superuser.com/questions/104500/ .

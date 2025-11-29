@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"math/rand"
 	"net/http"
 	"os"
@@ -14,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"github.com/sagan/goaider/cmd"
@@ -29,18 +29,19 @@ const (
 )
 
 var (
-	flagDir   string
 	flagForce bool
 	flagModel string
 )
 
 // sttCmd represents the stt command
 var sttCmd = &cobra.Command{
-	Use:   "stt",
+	Use:   "stt <dir>",
+	Args:  cobra.ExactArgs(1),
 	Short: "Generates speech-to-text transcripts for audio files",
-	Long: `Processes a directory of audio files (.wav, .mp3, .m4a, .flac, .ogg)
-and generates a corresponding .txt file for each one using the
-Google Gemini API.
+	Long: `Generates speech-to-text transcripts for audio files.
+
+Processes a directory of audio files (.wav, .mp3, .m4a, .flac, .ogg),
+and generates a corresponding .txt file for each one using the Google Gemini API.
 
 Implements exponential backoff to handle rate limiting (e.g., 10 RPM).
 
@@ -51,25 +52,24 @@ Requires the GEMINI_API_KEY environment variable to be set.`,
 
 func init() {
 	cmd.RootCmd.AddCommand(sttCmd)
-	sttCmd.Flags().StringVarP(&flagDir, "dir", "", "", "Directory containing audio files (required)")
 	sttCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Overwrite existing .txt transcript files")
-	sttCmd.Flags().StringVarP(&flagModel, "model", "", constants.DEFAULT_GEMINI_MODEL, "The model to use for transcription")
-	sttCmd.MarkFlagRequired("dir")
+	sttCmd.Flags().StringVarP(&flagModel, "model", "", constants.DEFAULT_GEMINI_MODEL,
+		"The model to use for transcription")
 }
 
 func stt(cmd *cobra.Command, args []string) error {
+	argDir := args[0]
 	apiKey := os.Getenv(constants.ENV_GEMINI_API_KEY)
 	if apiKey == "" {
 		return fmt.Errorf("error: %s environment variable not set", constants.ENV_GEMINI_API_KEY)
 	}
 
-	fmt.Printf("Processing audio files in: %q\n", flagDir)
-	fmt.Printf("Using model: %s\n", flagModel)
+	log.Printf("Using model: %s", flagModel)
 
 	// Read all files in the directory
-	files, err := os.ReadDir(flagDir)
+	files, err := os.ReadDir(argDir)
 	if err != nil {
-		return fmt.Errorf("error reading directory %q: %w", flagDir, err)
+		return fmt.Errorf("error reading directory %q: %w", argDir, err)
 	}
 
 	// 60-second timeout for a single request, but retries can make this longer.
@@ -91,19 +91,19 @@ func stt(cmd *cobra.Command, args []string) error {
 		}
 
 		// Define input and output paths
-		audioFilePath := filepath.Join(flagDir, fileName)
+		audioFilePath := filepath.Join(argDir, fileName)
 		outputTxtPath := strings.TrimSuffix(audioFilePath, fileExt) + ".txt"
 
 		// Check if output file exists
 		if !flagForce {
 			if _, err := os.Stat(outputTxtPath); err == nil {
-				fmt.Printf("Skipping (exists): %s\n", fileName)
+				log.Printf("Skipping (exists): %s", fileName)
 				continue
 			}
 		}
 
 		// Process the file
-		fmt.Printf("Processing: %s\n", fileName)
+		log.Printf("Processing: %s", fileName)
 
 		// 1. Read audio file
 		audioData, err := os.ReadFile(audioFilePath)
@@ -129,10 +129,10 @@ func stt(cmd *cobra.Command, args []string) error {
 			continue
 		}
 
-		fmt.Printf("Generated: %s\n", filepath.Base(outputTxtPath))
+		log.Printf("Generated: %s", filepath.Base(outputTxtPath))
 	}
 
-	fmt.Printf("Processing complete.\n")
+	log.Printf("Processing complete.")
 	if errorCnt > 0 {
 		return fmt.Errorf("%d errors", errorCnt)
 	}

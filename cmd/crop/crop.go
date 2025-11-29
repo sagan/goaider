@@ -26,17 +26,21 @@ var (
 var cropCmd = &cobra.Command{
 	Use:   "crop <dir>",
 	Short: "Crop and resize images in a directory",
-	Long:  `This command crops and resizes all images in a specified directory using smartcrop.`,
-	Args:  cobra.ExactArgs(1),
-	RunE:  crop,
+	Long: `Crop and resize images in a directory.
+	
+It crops images using smartcrop ( https://github.com/muesli/smartcrop ).`,
+	Args: cobra.ExactArgs(1),
+	RunE: crop,
 }
 
 func init() {
 	cmd.RootCmd.AddCommand(cropCmd)
-	cropCmd.Flags().StringVarP(&flagOutputDir, "output", "o", "", "Optional: output dir name. default to \"<input-dir>-crop\"")
-	cropCmd.Flags().IntVarP(&flagWidth, "width", "", 1024, "Optional: target photo width. default: 1024.")
-	cropCmd.Flags().IntVarP(&flagHeight, "height", "", 1024, "Optional: target photo height. default: 1024.")
-	cropCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Optional: Process and generate the target output file even if the file already exists.")
+	cropCmd.Flags().StringVarP(&flagOutputDir, "output", "o", "",
+		`Optional: output dir name. default to "<input-dir>-crop"`)
+	cropCmd.Flags().IntVarP(&flagWidth, "width", "", 1024, "Optional: target photo width")
+	cropCmd.Flags().IntVarP(&flagHeight, "height", "", 1024, "Optional: target photo height")
+	cropCmd.Flags().BoolVarP(&flagForce, "force", "", false,
+		"Optional: Process and generate the target output file even if the file already exists")
 }
 
 func crop(cmd *cobra.Command, args []string) error {

@@ -7,11 +7,13 @@ toolchain go1.24.10
 require (
 	github.com/Masterminds/sprig/v3 v3.3.0
 	github.com/disintegration/imaging v1.6.2
+	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/mattn/go-runewidth v0.0.19
 	github.com/mithrandie/csvq-driver v1.7.0
 	github.com/muesli/smartcrop v0.3.0
 	github.com/natefinch/atomic v1.0.1
+	github.com/pelletier/go-toml/v2 v2.2.4
 	github.com/rwcarlsen/goexif v0.0.0-20190401172101-9e8deecbddbd
 	github.com/sagan/zip v0.0.0-20240708090818-02b11188bf71
 	github.com/saintfish/chardet v0.0.0-20230101081208-5e3ef4b5456d
@@ -23,6 +25,7 @@ require (
 	golang.org/x/term v0.37.0
 	golang.org/x/text v0.30.0
 	golift.io/xtractr v0.2.2
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (

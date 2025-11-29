@@ -5,15 +5,16 @@ import (
 	"os"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/sagan/goaider/cmd/csv"
 	"github.com/sagan/goaider/util"
-	"github.com/spf13/cobra"
 )
 
 var joinCmd = &cobra.Command{
 	Use:   "join --on <on_field> <left.csv> <right.csv>",
-	Short: "merge (left join) two csv",
-	Long: `merge (left join) two csv.
+	Short: "Merge (left join) two csv files",
+	Long: `Merge (left join) two csv files.
 
 Read two csv files, "join" them and output a new csv. Output merged csv to stdout by default.
 
@@ -25,7 +26,8 @@ Read two csv files, "join" them and output a new csv. Output merged csv to stdou
 - If leftPrefix / rightPrefix is not empty, Prefix columns of left / right csv with this string in output csv.
 - If allJoin is true, do a "full join" instead of "left join": include all rows of both csv in output.
 - If all right csv column names are "masked" by left csv, it returns an error.
-- If noHeader is true, input files are treated as having no header row; columns are named c1, c2, c3...`,
+- If noHeader is true, input files are treated as having no header row; columns are named c1, c2, c3...,
+  note the output csv will have explicit c1, c2, c3... columns.`,
 	Args: cobra.ExactArgs(2),
 	RunE: join,
 }
@@ -83,8 +85,8 @@ func join(cmd *cobra.Command, args []string) (err error) {
 
 func init() {
 	// Add the join command to the root CSV command
-	joinCmd.Flags().BoolVarP(&flagFullJoin, "full-join", "", false, `Perform a full outer join instead of a left join.`)
-	joinCmd.Flags().StringVarP(&flagOn, "on", "", "", `join on field, can be "left_field:right_field" format`)
+	joinCmd.Flags().BoolVarP(&flagFullJoin, "full-join", "", false, `Perform a full outer join instead of a left join`)
+	joinCmd.Flags().StringVarP(&flagOn, "on", "", "", `(Required) Join on field, can be "left_field:right_field" format`)
 	joinCmd.Flags().StringVarP(&flagLeftPrefix, "left-prefix", "", "",
 		`Prefix columns of left csv with this string + "_"`)
 	joinCmd.Flags().StringVarP(&flagRightPrefix, "right-prefix", "", "",
