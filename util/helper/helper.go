@@ -113,7 +113,7 @@ func AskYesNoConfirm(prompt string) bool {
 // If file already exists, append the proper numeric suffix to make sure fullpath does not exist.
 // Note if a file system access error happens, it return last checked filename path along with the error
 func GetNewFilePath(dir string, name string) (fullpath string, err error) {
-	if dir == "" || name == "" {
+	if dir == "" && name == "" {
 		return "", fmt.Errorf(("empty dir & name"))
 	}
 	fullpath = filepath.Join(dir, name)
