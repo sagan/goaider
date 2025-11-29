@@ -12,7 +12,7 @@ import (
 	"golang.design/x/clipboard"
 )
 
-func copyFunc(cmd *cobra.Command, args []string) error {
+func doCopy(cmd *cobra.Command, args []string) error {
 	err := clipboard.Init()
 	if err != nil {
 		return err

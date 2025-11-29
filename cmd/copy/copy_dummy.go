@@ -12,6 +12,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func copyFunc(cmd *cobra.Command, args []string) error {
+func doCopy(cmd *cobra.Command, args []string) error {
 	return fmt.Errorf("%s is not supported", runtime.GOOS)
 }

@@ -22,29 +22,27 @@ Use "-" as input arg to read from stdin.`,
 }
 
 var (
-	flagForce   bool   // force overwrite existing file
 	flagKey     string // key field
 	flagInplace bool   // update input file in place
-	flagOutput  string // output file, set to "-" to output to stdout
 )
 
 func sortFunc(cmd *cobra.Command, args []string) (err error) {
 	argInput := args[0]
 
 	if flagInplace {
-		if flagOutput != "-" {
+		if csv.FlagOutput != "-" {
 			return fmt.Errorf("--inplace and --output flags are NOT compatible")
 		}
 		if argInput == "-" {
 			return fmt.Errorf("stdin input is NOT compatible with --inplace")
 		}
-		flagOutput = argInput
-		flagForce = true // implied overwrite
+		csv.FlagOutput = argInput
+		csv.FlagForce = true // implied overwrite
 	}
 
-	err = helper.InputFileAndOutput(argInput, flagOutput, flagForce, func(r io.Reader, w io.Writer,
+	err = helper.InputFileAndOutput(argInput, csv.FlagOutput, csv.FlagForce, func(r io.Reader, w io.Writer,
 		inputName, outputNme string) error {
-		return sortCsvFile(r, flagKey, w)
+		return sortCsvFile(r, flagKey, w, csv.FlagNoHeader)
 	})
 
 	if err != nil {
@@ -54,8 +52,6 @@ func sortFunc(cmd *cobra.Command, args []string) (err error) {
 }
 
 func init() {
-	sortCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Force overwriting without confirmation.")
-	sortCmd.Flags().StringVarP(&flagOutput, "output", "o", "-", `Output file path. Use "-" for stdout.`)
 	sortCmd.Flags().BoolVarP(&flagInplace, "inplace", "", false, `Update input file in place.`)
 	sortCmd.Flags().StringVarP(&flagKey, "key", "", "", `(Required) Key field.`)
 	sortCmd.MarkFlagRequired("key")

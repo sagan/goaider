@@ -29,10 +29,8 @@ Use "-" as input arg to read from stdin.`,
 
 var (
 	flagCheck   bool   // check mode, do not output anything, return 0 if csv has no duplicate rows
-	flagForce   bool   // force overwrite existing file
 	flagInplace bool   // update input file in place
 	flagKey     string // key field
-	flagOutput  string // output file, set to "-" to output to stdout
 )
 
 func uniq(cmd *cobra.Command, args []string) (err error) {
@@ -49,7 +47,7 @@ func uniq(cmd *cobra.Command, args []string) (err error) {
 			}
 			defer input.Close()
 		}
-		duplicates, err := uniqCsvFile(input, flagKey, io.Discard, nil)
+		duplicates, err := uniqCsvFile(input, flagKey, io.Discard, nil, csv.FlagNoHeader)
 		if err != nil {
 			return err
 		}
@@ -61,19 +59,19 @@ func uniq(cmd *cobra.Command, args []string) (err error) {
 	}
 
 	if flagInplace {
-		if flagOutput != "-" {
+		if csv.FlagOutput != "-" {
 			return fmt.Errorf("--inplace and --output flags are NOT compatible")
 		}
 		if argInput == "-" {
 			return fmt.Errorf("stdin input is NOT compatible with --inplace")
 		}
-		flagOutput = argInput
-		flagForce = true // implied overwrite
+		csv.FlagOutput = argInput
+		csv.FlagForce = true // implied overwrite
 	}
 
-	err = helper.InputFileAndOutput(argInput, flagOutput, flagForce, func(r io.Reader, w io.Writer,
+	err = helper.InputFileAndOutput(argInput, csv.FlagOutput, csv.FlagForce, func(r io.Reader, w io.Writer,
 		inputName, outputNme string) error {
-		duplicates, err := uniqCsvFile(r, flagKey, w, nil)
+		duplicates, err := uniqCsvFile(r, flagKey, w, nil, csv.FlagNoHeader)
 		if err == nil {
 			if inputName != outputNme {
 				log.Printf("%q => %q : %d duplicates removed", inputName, outputNme, duplicates)
@@ -94,8 +92,6 @@ func uniq(cmd *cobra.Command, args []string) (err error) {
 func init() {
 	uniqCmd.Flags().BoolVarP(&flagCheck, "check", "c", false,
 		"Check mode: do not output anything, exit 0 if csv has no duplicate rows, 1 if has duplicate rows")
-	uniqCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Force overwriting without confirmation")
-	uniqCmd.Flags().StringVarP(&flagOutput, "output", "o", "-", `Output file path. Use "-" for stdout.`)
 	uniqCmd.Flags().StringVarP(&flagKey, "key", "k", "", `(Required) Key field`)
 	uniqCmd.Flags().BoolVarP(&flagInplace, "inplace", "", false, `Update input file in place.`)
 	uniqCmd.MarkFlagRequired("key")

@@ -23,7 +23,8 @@ type rightRow struct {
 }
 
 // readCsv reads a CSV file, finds the join column index, and applies a prefix to headers.
-func readCsv(filePath, joinKey, prefix string) (*csvContent, error) {
+// If noHeader is true, headers are generated as "c1", "c2"... and all rows are treated as data.
+func readCsv(filePath, joinKey, prefix string, noHeader bool) (*csvContent, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("could not open file %s: %w", filePath, err)
@@ -40,33 +41,50 @@ func readCsv(filePath, joinKey, prefix string) (*csvContent, error) {
 		return nil, fmt.Errorf("file %s is empty", filePath)
 	}
 
+	var header []string
+	var data [][]string
+
+	if noHeader {
+		// Treat all records as data
+		data = allRecords
+		// Generate implicit headers based on the first row's length
+		if len(data) > 0 {
+			cols := len(data[0])
+			header = make([]string, cols)
+			for i := 0; i < cols; i++ {
+				header[i] = fmt.Sprintf("c%d", i+1)
+			}
+		}
+	} else {
+		// Standard behavior: first row is header
+		header = allRecords[0]
+		data = allRecords[1:]
+	}
+
 	content := &csvContent{
-		header:  allRecords[0],
-		data:    allRecords[1:],
+		header:  header,
+		data:    data,
 		prefix:  prefix,
 		joinKey: joinKey,
 	}
 
 	// Find the index of the join key
+	// Note: If noHeader is true, joinKey must be passed as "c1", "c2", etc.
+	content.joinIdx = -1 // Initialize to invalid index
 	for i, h := range content.header {
 		if h == joinKey {
 			content.joinIdx = i
 			break
 		}
 	}
-	if content.joinIdx == 0 && content.header[0] != joinKey {
-		return nil, fmt.Errorf("join key column '%s' not found in header of %s", joinKey, filePath)
+
+	if content.joinIdx == -1 {
+		return nil, fmt.Errorf("join key column '%s' not found in header of %s (headers: %v)", joinKey, filePath, content.header)
 	}
 
-	// Apply prefix to all headers (excluding the join key itself in the name if desired)
+	// Apply prefix to all headers
 	if prefix != "" {
 		for i := range content.header {
-			// Only prefix if the column is NOT the join key.
-			// The logic here prefixes ALL columns, which is typically safer.
-			// Let's stick to prefixing all non-join columns for a cleaner result,
-			// or prefixing ALL to make sure there are no conflicts,
-			// which is what the requirement implies for join logic.
-			// I will prefix all headers *except* the join key column in the output, but use the prefixed name internally.
 			content.header[i] = prefix + content.header[i]
 		}
 	}
@@ -83,20 +101,21 @@ func readCsv(filePath, joinKey, prefix string) (*csvContent, error) {
 // If leftPrefix / rightPrefix is not empty, Prefix columns of left / right csv with this string in output csv.
 // If allJoin is true, do a "full join" instead of "left join": include all rows of both csv in output,
 // if all right csv column names are "masked" by left csv, return an error instead.
+// If noHeader is true, input files are treated as having no header row; columns are named c1, c2, c3...
 func joinCsvFiles(leftCsvFile, rightCsvFile string, output io.Writer,
-	leftOn, rightOn, leftPrefix, rightPrefix string, allJoin bool) (err error) {
+	leftOn, rightOn, leftPrefix, rightPrefix string, allJoin, noHeader bool) (err error) {
 
 	if leftOn == "" || rightOn == "" {
 		return fmt.Errorf("join key parameters (leftOn and rightOn) must not be empty")
 	}
 
 	// 1. Read and preprocess both CSV files
-	left, err := readCsv(leftCsvFile, leftOn, leftPrefix)
+	left, err := readCsv(leftCsvFile, leftOn, leftPrefix, noHeader)
 	if err != nil {
 		return fmt.Errorf("failed to process left CSV: %w", err)
 	}
 
-	right, err := readCsv(rightCsvFile, rightOn, rightPrefix)
+	right, err := readCsv(rightCsvFile, rightOn, rightPrefix, noHeader)
 	if err != nil {
 		return fmt.Errorf("failed to process right CSV: %w", err)
 	}
@@ -225,6 +244,10 @@ func joinCsvFiles(leftCsvFile, rightCsvFile string, output io.Writer,
 	writer := csv.NewWriter(output)
 
 	// Write header
+	// If noHeader is true, we usually still write the header to the output because
+	// the columns from two files might be mixed/joined, making the structure ambiguous without headers.
+	// However, if strict "no header output" is desired, this line could be conditional.
+	// Based on standard "join" tool behavior, the result usually gains a header.
 	if err := writer.Write(outputHeader); err != nil {
 		return fmt.Errorf("failed to write output header: %w", err)
 	}

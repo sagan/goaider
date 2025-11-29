@@ -11,7 +11,7 @@ var copyCmd = &cobra.Command{
 	Use:   "copy",
 	Short: "copy stdin to clipboard. Windows only",
 	Long:  `copy stdin to clipboard. Windows only.`,
-	RunE:  copyFunc,
+	RunE:  doCopy,
 }
 
 var (

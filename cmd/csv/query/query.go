@@ -36,7 +36,7 @@ Note:
   it must be wrapped in backticks.
 - In Linux bash, if query contains backticks, to prevent interpretion of backticks as cmd,
   the argument must be wrapped in single quotes.
-- Filename extension can be omitted if it's ".csv".
+- Filename extension can be omitted in sql table if only "<filename>.csv" but not "<filename>" file exists.
 - Literal strings in sql should be wrapped use double quotes.`,
 	Args: cobra.ExactArgs(1),
 	RunE: query,
@@ -44,10 +44,8 @@ Note:
 
 var (
 	flagDir      string // csv files dir. defaults to ".".
-	flagOutput   string // output file. default to "-" (stdout).
 	flagTemplate string // Go text template string.
 	flagText     bool   // output plain text.
-	flagForce    bool   // force overwrite existing file.
 )
 
 func query(cmd *cobra.Command, args []string) (err error) {
@@ -61,19 +59,26 @@ func query(cmd *cobra.Command, args []string) (err error) {
 	}
 	defer db.Close()
 
+	if csvCmd.FlagNoHeader {
+		_, err = db.Exec("SET @@NO_HEADER TO TRUE")
+		if err != nil {
+			return fmt.Errorf("failed to set no-header flag: %w", err)
+		}
+	}
+
 	rows, err := db.Query(query)
 	if err != nil {
 		return err
 	}
 
 	var output *os.File
-	if flagOutput == "-" {
+	if csvCmd.FlagOutput == "-" {
 		output = os.Stdout
 	} else {
-		if exists, err := util.FileExists(flagOutput); err != nil || (exists && !flagForce) {
-			return fmt.Errorf("output file %q exists or access failed, use force to override. err: %w", flagOutput, err)
+		if exists, err := util.FileExists(csvCmd.FlagOutput); err != nil || (exists && !csvCmd.FlagForce) {
+			return fmt.Errorf("output file %q exists or access failed. err: %w", csvCmd.FlagOutput, err)
 		}
-		output, err = os.Create(flagOutput)
+		output, err = os.Create(csvCmd.FlagOutput)
 		if err != nil {
 			return err
 		}
@@ -95,14 +100,12 @@ func query(cmd *cobra.Command, args []string) (err error) {
 func init() {
 	csvCmd.CsvCmd.AddCommand(joinCmd)
 	joinCmd.Flags().StringVarP(&flagDir, "dir", "d", ".", "CSV files directory")
-	joinCmd.Flags().StringVarP(&flagOutput, "output", "o", "-", `Output file path. Use "-" for stdout.`)
 	joinCmd.Flags().StringVarP(&flagTemplate, "template", "t", "",
 		`Go text template string to format output. If set, --text is implied. Example: '{{.col1}},{{.col2}}'. `+
 			`Sprig (v3) functions are supported, see https://github.com/Masterminds/sprig .`)
 	joinCmd.Flags().BoolVarP(&flagText, "text", "", false,
 		`Output as plain text instead of CSV. No header line is written. If --template is set, this is implied. `+
-			`The --template is required unless the query result has only one (1) column, in which case it's written directly.`)
-	joinCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Force overwrite existing file.")
+			`The --template is required unless query result has only one (1) column, in which case it's written directly.`)
 }
 
 // writeSqlRowsToCsv writes the result of a sql query to a CSV writer.
