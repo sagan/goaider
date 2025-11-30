@@ -1,6 +1,7 @@
 package util
 
 import (
+	"bytes"
 	"cmp"
 	"encoding/csv"
 	"encoding/json"
@@ -17,6 +18,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"text/template"
 
 	"github.com/pelletier/go-toml/v2"
 	log "github.com/sirupsen/logrus"
@@ -445,4 +447,14 @@ func CountNonZeroVariables(vars ...any) (cnt int) {
 		}
 	}
 	return
+}
+
+// Execute Go text template and return rendered string.
+// The result string is trim spaced.
+func ExecTemplate(tpl *template.Template, data any) (string, error) {
+	var buf bytes.Buffer
+	if err := tpl.Execute(&buf, data); err != nil {
+		return "", fmt.Errorf("template execution error: %w", err)
+	}
+	return strings.TrimSpace(buf.String()), nil
 }

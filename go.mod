@@ -6,9 +6,9 @@ toolchain go1.24.10
 
 require (
 	cloud.google.com/go/translate v1.12.7
-	github.com/Masterminds/sprig/v3 v3.3.0
 	github.com/c-bata/go-prompt v0.2.6
 	github.com/disintegration/imaging v1.6.2
+	github.com/go-sprout/sprout v1.0.2
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/mattn/go-runewidth v0.0.19
@@ -35,9 +35,8 @@ require (
 	cloud.google.com/go/auth v0.16.4 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.8.0 // indirect
-	dario.cat/mergo v1.0.1 // indirect
-	github.com/Masterminds/goutils v1.1.1 // indirect
-	github.com/Masterminds/semver/v3 v3.3.0 // indirect
+	dario.cat/mergo v1.0.2 // indirect
+	github.com/Masterminds/semver/v3 v3.4.0 // indirect
 	github.com/andybalholm/brotli v1.0.5 // indirect
 	github.com/bodgit/plumbing v1.3.0 // indirect
 	github.com/bodgit/sevenzip v1.4.0 // indirect
@@ -55,7 +54,6 @@ require (
 	github.com/googleapis/gax-go/v2 v2.15.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
-	github.com/huandu/xstrings v1.5.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/kdomanski/iso9660 v0.3.3 // indirect
 	github.com/klauspost/compress v1.16.3 // indirect
@@ -74,8 +72,7 @@ require (
 	github.com/pierrec/lz4/v4 v4.1.17 // indirect
 	github.com/pkg/term v1.2.0-beta.2 // indirect
 	github.com/ryszard/tfutils v0.0.0-20161028141955-98de232c7c68 // indirect
-	github.com/shopspring/decimal v1.4.0 // indirect
-	github.com/spf13/cast v1.7.0 // indirect
+	github.com/spf13/cast v1.9.2 // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
 	github.com/ulikunitz/xz v0.5.11 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect

@@ -1,12 +1,11 @@
 package render
 
 import (
-	"bytes"
 	"encoding/csv"
 	"fmt"
 	"io" // Renamed to avoid conflict with current package name 'exec'
-	"strings"
 
+	"github.com/sagan/goaider/util"
 	"github.com/sagan/goaider/util/helper"
 	"github.com/sagan/goaider/util/stringutil"
 )
@@ -64,12 +63,10 @@ func renderCsv(input io.Reader, templateStr string, noHeader bool, output io.Wri
 		}
 
 		// Execute Template
-		var buf bytes.Buffer
-		if err := tmpl.Execute(&buf, data); err != nil {
+		renderResult, err := util.ExecTemplate(tmpl, data)
+		if err != nil {
 			return fmt.Errorf("template execute error: %w", err)
 		}
-
-		renderResult := strings.TrimSpace(buf.String())
 		if renderResult == "" {
 			continue
 		}

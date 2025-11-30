@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	csvCmd "github.com/sagan/goaider/cmd/csv"
+	"github.com/sagan/goaider/constants"
 )
 
 var execCmd = &cobra.Command{
@@ -35,7 +36,7 @@ var (
 func init() {
 	execCmd.Flags().StringVarP(&flagTemplate, "template", "t", "",
 		`Go template string to build the command to be executed for each row. E.g. "mycmd {{.foo}} {{.bar}}". `+
-			`Sprig (v3) functions are supported, see https://github.com/Masterminds/sprig`)
+			constants.HELP_TEMPLATE_FLAG)
 	execCmd.Flags().BoolVarP(&flagDryRun, "dry-run", "d", false, "Print the commands instead of executing them")
 	execCmd.Flags().BoolVarP(&flagContinueOnError, "continue-on-error", "c", false,
 		"Continue executing even if an error occurs for a row "+

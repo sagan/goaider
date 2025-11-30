@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	csvCmd "github.com/sagan/goaider/cmd/csv"
+	"github.com/sagan/goaider/constants"
 	"github.com/sagan/goaider/util/helper"
 )
 
@@ -29,7 +30,7 @@ var (
 func init() {
 	renderCmd.Flags().StringVarP(&flagTemplate, "template", "t", "",
 		`(Required) Go template string to render the content for each csv row. E.g. "{{.foo}} {{.bar}}". `+
-			`Sprig (v3) functions are supported, see https://github.com/Masterminds/sprig`)
+			constants.HELP_TEMPLATE_FLAG)
 	renderCmd.Flags().BoolVarP(&flagOneLine, "one-line", "", false,
 		`Force each csv row outputs only one line. This is useful when a field contains newlines. `+
 			`It replaces one or more consecutive newline characters (\r, \n) with single space`)

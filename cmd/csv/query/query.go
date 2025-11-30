@@ -16,6 +16,7 @@ import (
 	"github.com/spf13/cobra"
 
 	csvCmd "github.com/sagan/goaider/cmd/csv"
+	"github.com/sagan/goaider/constants"
 	"github.com/sagan/goaider/util"
 	"github.com/sagan/goaider/util/helper"
 	"github.com/sagan/goaider/util/stringutil"
@@ -108,7 +109,7 @@ func init() {
 	joinCmd.Flags().StringVarP(&flagDir, "dir", "d", ".", "CSV files directory")
 	joinCmd.Flags().StringVarP(&flagTemplate, "template", "t", "",
 		`Go text template string to format output. If set, --text is implied. Example: '{{.col1}},{{.col2}}'. `+
-			`Sprig (v3) functions are supported, see https://github.com/Masterminds/sprig`)
+			constants.HELP_TEMPLATE_FLAG)
 	joinCmd.Flags().BoolVarP(&flagText, "text", "", false,
 		`Output as plain text instead of CSV. No header line is written. If --template is set, this is implied. `+
 			`The --template is required unless query result has only one (1) column, in which case it's written directly`)

@@ -10,7 +10,8 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/Masterminds/sprig/v3"
+	"github.com/go-sprout/sprout"
+	"github.com/go-sprout/sprout/group/all"
 	"github.com/natefinch/atomic"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/term"
@@ -346,6 +347,16 @@ func InputFileAndOutput(input, output string, force bool, processor func(r io.Re
 	return nil
 }
 
+var handler *sprout.DefaultHandler
+
+var templateFuncs map[string]any
+
+func init() {
+	handler = sprout.New()
+	handler.AddGroups(all.RegistryGroup())
+	templateFuncs = handler.Build()
+}
+
 // Get a Go text template instance from tpl string.
 // If tpl starts with "@" char, treat it (the rest part after @) as a file name
 // and read template contents from it instead.
@@ -357,7 +368,7 @@ func GetTemplate(tpl string, strict bool) (*template.Template, error) {
 		}
 		tpl = string(contents)
 	}
-	templateInstance := template.New("template").Funcs(sprig.FuncMap())
+	templateInstance := template.New("template").Funcs(templateFuncs)
 	if strict {
 		templateInstance = templateInstance.Option("missingkey=error")
 	}
