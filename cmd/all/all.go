@@ -12,4 +12,5 @@ import (
 	_ "github.com/sagan/goaider/cmd/paste"
 	_ "github.com/sagan/goaider/cmd/sovits-genlist"
 	_ "github.com/sagan/goaider/cmd/stt"
+	_ "github.com/sagan/goaider/cmd/translate"
 )

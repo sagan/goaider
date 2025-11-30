@@ -6,15 +6,14 @@ import (
 	"fmt"
 	"io" // Renamed to avoid conflict with current package name 'exec'
 	"strings"
-	"text/template"
 
-	"github.com/Masterminds/sprig/v3"
+	"github.com/sagan/goaider/util/helper"
 	"github.com/sagan/goaider/util/stringutil"
 )
 
 func renderCsv(input io.Reader, templateStr string, noHeader bool, output io.Writer, oneLine bool) (err error) {
 	// 1. Parse the template initially to ensure it is valid.
-	tmpl, err := template.New("cmd").Option("missingkey=error").Funcs(sprig.FuncMap()).Parse(templateStr)
+	tmpl, err := helper.GetTemplate(templateStr, true)
 	if err != nil {
 		return fmt.Errorf("invalid template: %w", err)
 	}

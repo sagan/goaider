@@ -8,10 +8,9 @@ import (
 	"os"
 	osexec "os/exec" // Renamed to avoid conflict with current package name 'exec'
 	"strings"
-	"text/template"
 
-	"github.com/Masterminds/sprig/v3"
 	"github.com/google/shlex"
+	"github.com/sagan/goaider/util/helper"
 )
 
 // Read csv file, execute a cmd for each line of the csv.
@@ -28,7 +27,7 @@ import (
 func execCsv(input io.Reader, templateStr string, noHeader bool,
 	continueOnError bool, dryRun bool) (successRows, skipRows, errorRows int, err error) {
 	// 1. Parse the template initially to ensure it is valid.
-	tmpl, err := template.New("cmd").Option("missingkey=error").Funcs(sprig.FuncMap()).Parse(templateStr)
+	tmpl, err := helper.GetTemplate(templateStr, true)
 	if err != nil {
 		return 0, 0, 0, fmt.Errorf("invalid template: %w", err)
 	}

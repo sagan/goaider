@@ -8,7 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"text/template"
 
+	"github.com/Masterminds/sprig/v3"
 	"github.com/natefinch/atomic"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/term"
@@ -342,4 +344,22 @@ func InputFileAndOutput(input, output string, force bool, processor func(r io.Re
 	}
 
 	return nil
+}
+
+// Get a Go text template instance from tpl string.
+// If tpl starts with "@" char, treat it (the rest part after @) as a file name
+// and read template contents from it instead.
+func GetTemplate(tpl string, strict bool) (*template.Template, error) {
+	if strings.HasPrefix(tpl, "@") {
+		contents, err := os.ReadFile(tpl[1:])
+		if err != nil {
+			return nil, err
+		}
+		tpl = string(contents)
+	}
+	templateInstance := template.New("template").Funcs(sprig.FuncMap())
+	if strict {
+		templateInstance = templateInstance.Option("missingkey=error")
+	}
+	return templateInstance.Parse(tpl)
 }

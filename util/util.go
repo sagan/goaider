@@ -411,3 +411,38 @@ func HasDuplicates[T comparable](s []T) bool {
 	}
 	return false // No duplicates found
 }
+
+// Return count of variable in vars that fulfil the condition that variable is non-zero value
+func CountNonZeroVariables(vars ...any) (cnt int) {
+	for _, variable := range vars {
+		switch v := variable.(type) {
+		case string:
+			if v != "" {
+				cnt++
+			}
+		case int:
+			if v != 0 {
+				cnt++
+			}
+		case int64:
+			if v != 0 {
+				cnt++
+			}
+		case float64:
+			if v != 0 {
+				cnt++
+			}
+		case bool:
+			if v {
+				cnt++
+			}
+		case []string:
+			if len(v) > 0 {
+				cnt++
+			}
+		default:
+			panic("unsupported type")
+		}
+	}
+	return
+}

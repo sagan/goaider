@@ -11,13 +11,13 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/Masterminds/sprig/v3"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mithrandie/csvq-driver"
 	"github.com/spf13/cobra"
 
 	csvCmd "github.com/sagan/goaider/cmd/csv"
 	"github.com/sagan/goaider/util"
+	"github.com/sagan/goaider/util/helper"
 	"github.com/sagan/goaider/util/stringutil"
 )
 
@@ -232,7 +232,7 @@ func writeSqlRowsToText(rows *sql.Rows, output io.Writer, templateStr string, on
 	var t *template.Template
 	if !isSingleColRaw {
 		if templateStr != "" {
-			t, err = template.New("row").Option("missingkey=error").Funcs(sprig.FuncMap()).Parse(templateStr)
+			t, err = helper.GetTemplate(templateStr, true)
 			if err != nil {
 				return fmt.Errorf("failed to parse template: %w", err)
 			}
