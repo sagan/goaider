@@ -36,8 +36,8 @@ permissions required for the service account: Cloud Translation API User.
 
 Usage:
 - goaider translate "Bonjour" # translate text
-- goaider translate - # Read from stdin and translate
 - goaider translate --input foo.txt # read from file and translate
+- goaider translate --input - # Read from stdin and translate
 
 By default it outputs to stdout. Use --output flag to output to file.
 
@@ -162,7 +162,7 @@ func doTranslate(cmd *cobra.Command, args []string) (err error) {
 	}
 
 	inputText := ""
-	if argInput == "-" || flagInput == "-" {
+	if flagInput == "-" {
 		if contents, err := io.ReadAll(os.Stdin); err != nil {
 			return fmt.Errorf("failed to read stdin: %w", err)
 		} else {

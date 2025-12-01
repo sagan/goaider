@@ -3,6 +3,7 @@ package util
 import (
 	"bytes"
 	"cmp"
+	"crypto/rand"
 	"encoding/csv"
 	"encoding/json"
 	"encoding/xml"
@@ -36,8 +37,57 @@ func ToJson(v any) string {
 	return string(b)
 }
 
+// errorWriter wraps an io.Writer and tracks the first error encountered.
+type errorWriter struct {
+	W   io.Writer
+	Err error // Holds the first error encountered
+}
+
+// Write implements the io.Writer interface. It passes the write operation
+// through and records the first non-nil error. Subsequent writes are executed
+// but errors are ignored if one is already recorded.
+func (ew *errorWriter) Write(p []byte) (n int, err error) {
+	if ew.Err != nil {
+		// Return success (n>0) or the existing error.
+		// If you want to strictly stop writing, return 0, ew.Err
+		// but for fmt.Fprintf, it's safer to return the underlying write's result.
+		// A simpler approach is to use the standard library's approach
+		// where the internal tracking handles this better.
+
+		// For simplicity and effectiveness in this context, we will follow
+		// the pattern of tracking the first error and continuing to write
+		// *if* the underlying Write succeeds, but recording the first failure.
+		// A common practice for aggregation: If we have an error, we stop.
+		return len(p), nil
+	}
+
+	// Perform the actual write
+	n, err = ew.W.Write(p)
+
+	// If an error occurred, record it.
+	if err != nil {
+		ew.Err = err
+	}
+
+	// The number of bytes written must be returned, even if an error occurred.
+	return n, err
+}
+
+// Fprintf is a convenience wrapper that uses fmt.Fprintf and ignores the
+// returned count/error, relying on the errorWriter to track the error state.
+func (ew *errorWriter) Fprintf(format string, a ...interface{}) {
+	// We ignore the return values because ew.Write takes care of error tracking.
+	_, _ = fmt.Fprintf(ew, format, a...)
+}
+
 // PrintScalarsTable prints a table of scalar data to stdout.
-func PrintScalarsTable(scalars map[string]*ingest.ScalarEvents) {
+func PrintScalarsTable(output io.Writer, scalars map[string]*ingest.ScalarEvents) error {
+	// 1. Wrap the output writer with the error-tracking writer
+	ew := &errorWriter{W: output}
+
+	// The rest of the logic remains the same, but all fmt.Fprintf calls
+	// are replaced with ew.Fprintf, eliminating the need for `if err != nil { return err }`
+
 	// Get all tags and sort them alphabetically.
 	tags := make([]string, 0, len(scalars))
 	for tag := range scalars {
@@ -59,15 +109,15 @@ func PrintScalarsTable(scalars map[string]*ingest.ScalarEvents) {
 	sort.Slice(sortedSteps, func(i, j int) bool { return sortedSteps[i] < sortedSteps[j] })
 
 	// Print header.
-	fmt.Printf("% -10s", "Step")
+	ew.Fprintf("% -10s", "Step")
 	for _, tag := range tags {
-		fmt.Printf("% -20s", tag)
+		ew.Fprintf("% -20s", tag)
 	}
-	fmt.Printf("\n")
+	ew.Fprintf("\n")
 
 	// Print data.
 	for _, step := range sortedSteps {
-		fmt.Printf("% -10d", step)
+		ew.Fprintf("% -10d", step)
 		for _, tag := range tags {
 			found := false
 			if scalarEvents, ok := scalars[tag]; ok {
@@ -76,9 +126,9 @@ func PrintScalarsTable(scalars map[string]*ingest.ScalarEvents) {
 						value := scalarEvents.Value[i]
 						// Handle NaN values
 						if math.IsNaN(float64(value)) {
-							fmt.Printf("% -20s", "NaN")
+							ew.Fprintf("% -20s", "NaN")
 						} else {
-							fmt.Printf("% -20f", value)
+							ew.Fprintf("% -20f", value)
 						}
 						found = true
 						break
@@ -86,15 +136,15 @@ func PrintScalarsTable(scalars map[string]*ingest.ScalarEvents) {
 				}
 			}
 			if !found {
-				fmt.Printf("% -20s", "")
+				ew.Fprintf("% -20s", "")
 			}
 		}
-		fmt.Printf("\n")
+		ew.Fprintf("\n")
 	}
 
 	// Print lowest point for each tag
-	fmt.Printf("\n")
-	fmt.Printf("Lowest points for each tag:\n")
+	ew.Fprintf("\n")
+	ew.Fprintf("Lowest points for each tag:\n")
 	for _, tag := range tags {
 		if scalarEvents, ok := scalars[tag]; ok && len(scalarEvents.Value) > 0 {
 			minVal := float64(scalarEvents.Value[0])
@@ -106,21 +156,18 @@ func PrintScalarsTable(scalars map[string]*ingest.ScalarEvents) {
 					minStep = scalarEvents.Step[i]
 				}
 			}
-			fmt.Printf("% -20s: Value = % -15f, Step = %d\n", tag, minVal, minStep)
+			ew.Fprintf("% -20s: Value = % -15f, Step = %d\n", tag, minVal, minStep)
 		} else {
-			fmt.Printf("% -20s: No data or empty\n", tag)
+			ew.Fprintf("% -20s: No data or empty\n", tag)
 		}
 	}
+
+	// 2. Return the accumulated error at the very end.
+	return ew.Err
 }
 
 // SaveScalarsToCSV saves the scalar data to a CSV file.
-func SaveScalarsToCSV(scalars map[string]*ingest.ScalarEvents, filename string) error {
-	file, err := os.Create(filename)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
+func SaveScalarsToCSV(file io.Writer, scalars map[string]*ingest.ScalarEvents) (err error) {
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
 
@@ -457,4 +504,52 @@ func ExecTemplate(tpl *template.Template, data any) (string, error) {
 		return "", fmt.Errorf("template execution error: %w", err)
 	}
 	return strings.TrimSpace(buf.String()), nil
+}
+
+// Return a cryptographically secure random bytes
+func RandBytes(length int) []byte {
+	if length <= 0 {
+		return []byte{}
+	}
+	b := make([]byte, length)
+	_, err := rand.Read(b)
+	if err != nil {
+		panic("rand.Read() failed")
+	}
+	return b
+}
+
+// Return a cryptographically secure random string of format /[a-zA-Z0-9]{length}/ .
+// If digigOnly is true, return  /[0-9]{length}/
+func RandString(length int, digitOnly bool) string {
+	if length <= 0 {
+		return ""
+	}
+	var rand_chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	if digitOnly {
+		rand_chars = "0123456789"
+	}
+	var sb strings.Builder
+	// (math.MaxUint8 / len(rand_chars)) results in an integer, e.g., 4
+	// The result is directly cast to float64, e.g., 4.0
+	// This is multiplied by float64(len(rand_chars))
+	var max byte = byte(float64(math.MaxUint8/len(rand_chars)) * float64(len(rand_chars)))
+	buf := make([]byte, length)
+outer:
+	for {
+		if _, err := rand.Read(buf); err != nil {
+			panic("rand.Read() failed")
+		}
+		for _, byte := range buf {
+			// By taking only the numbers up to a multiple of char space size and discarding others,
+			// we expect a uniform distribution of all possible chars.
+			if byte < max {
+				sb.WriteByte(rand_chars[int(byte)%len(rand_chars)])
+			}
+			if sb.Len() >= length {
+				break outer
+			}
+		}
+	}
+	return sb.String()
 }

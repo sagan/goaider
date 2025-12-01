@@ -16,6 +16,7 @@ require (
 	github.com/muesli/smartcrop v0.3.0
 	github.com/natefinch/atomic v1.0.1
 	github.com/pelletier/go-toml/v2 v2.2.4
+	github.com/richinsley/comfy2go v0.6.6
 	github.com/rwcarlsen/goexif v0.0.0-20190401172101-9e8deecbddbd
 	github.com/sagan/zip v0.0.0-20240708090818-02b11188bf71
 	github.com/saintfish/chardet v0.0.0-20230101081208-5e3ef4b5456d
@@ -52,6 +53,7 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.6 // indirect
 	github.com/googleapis/gax-go/v2 v2.15.0 // indirect
+	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
