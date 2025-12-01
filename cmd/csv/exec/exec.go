@@ -35,7 +35,7 @@ var (
 
 func init() {
 	execCmd.Flags().StringVarP(&flagTemplate, "template", "t", "",
-		`Go template string to build the command to be executed for each row. E.g. "mycmd {{.foo}} {{.bar}}". `+
+		`(Required) Template to build the cmdline to be executed for each row. E.g. "mycmd {{.foo}} {{.bar}}". `+
 			constants.HELP_TEMPLATE_FLAG)
 	execCmd.Flags().BoolVarP(&flagDryRun, "dry-run", "d", false, "Print the commands instead of executing them")
 	execCmd.Flags().BoolVarP(&flagContinueOnError, "continue-on-error", "c", false,

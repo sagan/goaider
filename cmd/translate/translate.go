@@ -32,7 +32,7 @@ var translateCmd = &cobra.Command{
 	Long: `Translate text using Google Cloud Translation API.
 
 It requires GOOGLE_APPLICATION_CREDENTIALS env to be the path to Google Cloud API service account key.json file,
-permissions required: Cloud Translation API User .
+permissions required for the service account: Cloud Translation API User.
 
 Usage:
 - goaider translate "Bonjour" # translate text
@@ -47,19 +47,19 @@ that translate each input line and output the result.`,
 }
 
 var (
-	flagForce        bool
-	flagCopyPrefix   string // prefix string when copying translated text to clipboard
-	flagCopyTemplate string // template string for generating text that's copied to clipboard
-	flagAutoCopy     bool   // auto copy translated text to clipboard
-	flagInput        string // input file
-	flagTargetLang   string // Target lang. Any of: "ja", "fr", "ru", "es", "de", "en", "zh", "zh-cn", "zh-tw", "chs", "cht"
-	flagSourceLang   string // source lang
-	flagOutput       string // output file, "-" for stdout (default)
+	flagForce          bool
+	flagOutputPrefix   string // prefix string when generating output text
+	flagOutputTemplate string // template string for generating output text
+	flagAutoCopy       bool   // auto copy translated text to clipboard
+	flagInput          string // input file
+	flagTargetLang     string // Target lang. Any of: "ja", "fr", "ru", "es", "de", "en", "zh", "zh-cn", "zh-tw", "chs", "cht"
+	flagSourceLang     string // source lang
+	flagOutput         string // output file, "-" for stdout (default)
 )
 
 func init() {
 	translateCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Force overwriting without confirmation")
-	translateCmd.Flags().BoolVarP(&flagAutoCopy, "auto-copy", "", false, `Auto copy translated text to clipboard. `+
+	translateCmd.Flags().BoolVarP(&flagAutoCopy, "auto-copy", "C", false, `Auto copy translated text to clipboard. `+
 		`It works on Windows only`)
 	translateCmd.Flags().StringVarP(&flagTargetLang, "target", "t", "en",
 		`Target language. Any of: "ja", "fr", "ru", "es", "de", "en", "zh", "zh-cn", "zh-tw", "chs", "cht"`)
@@ -67,14 +67,12 @@ func init() {
 		`Source language. Any of: "auto", "ja", "fr", "ru", "es", "de", "en", "zh", "zh-cn", "zh-tw", "chs", "cht"`)
 	translateCmd.Flags().StringVarP(&flagInput, "input", "i", "", `Read text from input file. Use "-" for stdin`)
 	translateCmd.Flags().StringVarP(&flagOutput, "output", "o", "-", `Output file path. Use "-" for stdout`)
-	translateCmd.Flags().StringVarP(&flagCopyPrefix, "auto-copy-prefix", "", "",
-		`Auto copy translated text to clipboard with this string as fixed prefix. Implies --auto-copy. `+
-			`It works on Windows only`)
-	translateCmd.Flags().StringVarP(&flagCopyTemplate, "auto-copy-template", "", "",
-		`Go template string to generate text that's copied to clipboard. Implies --auto-copy. It works on Windows only. `+
-			`Context: {text: "translated text", original: "original text", target: "en", source: "auto"}; `+
+	translateCmd.Flags().StringVarP(&flagOutputPrefix, "output-prefix", "P", "",
+		`Prepend this prefix to translated text to generate response text`)
+	translateCmd.Flags().StringVarP(&flagOutputTemplate, "output-template", "T", "",
+		`Template to generate response text. `+
+			`Context: {text: "translated text", original: "original text", target: "en", source: "ja"}, `+
 			`where target / source is the language of translated / original text. `+constants.HELP_TEMPLATE_FLAG)
-
 	cmd.RootCmd.AddCommand(translateCmd)
 }
 
@@ -84,11 +82,6 @@ func shellCompleter(d prompt.Document) []prompt.Suggest {
 }
 
 func doTranslate(cmd *cobra.Command, args []string) (err error) {
-	if cnt := util.CountNonZeroVariables(flagCopyPrefix, flagCopyTemplate); cnt > 1 {
-		return fmt.Errorf("--auto-copy-prefix and --auto-copy-template can NOT be both set")
-	} else if cnt > 0 {
-		flagAutoCopy = true
-	}
 	var targetLang, sourceLang language.Tag
 	if tag, ok := translation.LanguageTags[flagTargetLang]; !ok {
 		return fmt.Errorf("unsupported target lang %s", flagTargetLang)
@@ -108,8 +101,8 @@ func doTranslate(cmd *cobra.Command, args []string) (err error) {
 	}
 
 	var copyTemplate *template.Template
-	if flagCopyTemplate != "" {
-		copyTemplate, err = helper.GetTemplate(flagCopyTemplate, true)
+	if flagOutputTemplate != "" {
+		copyTemplate, err = helper.GetTemplate(flagOutputTemplate, true)
 		if err != nil {
 			return fmt.Errorf("invalid copy template: %w", err)
 		}
@@ -142,14 +135,19 @@ func doTranslate(cmd *cobra.Command, args []string) (err error) {
 				targetLang = tag
 				return
 			}
-			translatedText, err := translation.Trans(ctx, client, input, targetLang, sourceLang)
+			translatedText, detectedSource, err := translation.Trans(ctx, client, input, targetLang, sourceLang)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "failed to translate: %v", err)
 			}
-			if flagAutoCopy {
-				copy(copyTemplate, flagCopyPrefix, translatedText, input, flagTargetLang, flagSourceLang)
+			response, err := render(copyTemplate, flagOutputPrefix, translatedText, input, flagTargetLang, detectedSource)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "error generating response: %v", err)
+				return
 			}
-			fmt.Printf("%s\n", translatedText)
+			if flagAutoCopy {
+				clipboard.CopyString(response)
+			}
+			fmt.Printf("%s\n", response)
 		}, shellCompleter, prompt.OptionLivePrefix(func() (prefix string, useLivePrefix bool) {
 			return fmt.Sprintf("(%s) > ", flagTargetLang), true
 		}), prompt.OptionTitle("goaider-translate"))
@@ -185,15 +183,20 @@ func doTranslate(cmd *cobra.Command, args []string) (err error) {
 		return nil
 	}
 
-	translatedText, err := translation.Trans(ctx, client, inputText, targetLang, sourceLang)
+	translatedText, detectedSource, err := translation.Trans(ctx, client, inputText, targetLang, sourceLang)
 	if err != nil {
 		return fmt.Errorf("failed to translate: %w", err)
 	}
+	response, err := render(copyTemplate, flagOutputPrefix, translatedText, inputText, flagTargetLang, detectedSource)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error generating response: %v", err)
+		return
+	}
 	if flagAutoCopy {
-		copy(copyTemplate, flagCopyPrefix, translatedText, inputText, flagTargetLang, flagSourceLang)
+		clipboard.CopyString(response)
 	}
 	if flagOutput == "-" {
-		fmt.Printf("%s\n", translatedText)
+		fmt.Printf("%s\n", response)
 	} else {
 		err = atomic.WriteFile(flagOutput, strings.NewReader(translatedText))
 		if err != nil {
@@ -204,9 +207,9 @@ func doTranslate(cmd *cobra.Command, args []string) (err error) {
 	return nil
 }
 
-// copy copies the translated text to the clipboard, optionally with a prefix or using a template.
+// render generated the response from translated text, optionally with a prefix or using a template.
 // It returns an error if template execution fails.
-func copy(tpl *template.Template, prefix, text, original, target, source string) error {
+func render(tpl *template.Template, prefix, text, original, target, source string) (response string, err error) {
 	if tpl != nil {
 		data := map[string]string{
 			"text":     text,
@@ -214,14 +217,12 @@ func copy(tpl *template.Template, prefix, text, original, target, source string)
 			"target":   target,
 			"source":   source,
 		}
-		copyText, err := util.ExecTemplate(tpl, data)
+		response, err = util.ExecTemplate(tpl, data)
 		if err != nil {
-			return fmt.Errorf("failed to execute copy template: %w", err)
+			return "", fmt.Errorf("failed to execute copy template: %w", err)
 		}
-		clipboard.CopyString(copyText)
 	} else {
-		clipboard.CopyString(strings.TrimSpace(prefix + text))
+		response = text
 	}
-	return nil
-
+	return strings.TrimSpace(prefix + response), nil
 }

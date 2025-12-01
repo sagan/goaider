@@ -9,6 +9,8 @@ import (
 	"golang.org/x/text/language"
 )
 
+var tag language.Tag
+
 var LanguageTags = map[string]language.Tag{
 	"en":    language.English,
 	"ja":    language.Japanese,
@@ -26,7 +28,11 @@ var LanguageTags = map[string]language.Tag{
 // We only support some popular languages
 var Languages = util.Keys(LanguageTags)
 
-func Trans(ctx context.Context, client *translate.Client, input string, targetLang, sourceLang language.Tag) (string, error) {
+// Translate input to targetLang. If sourceLang is empty, the input language is auto guessed.
+// The returned detectecSource is the detected input language (en / fr...),
+// or the original sourceLang if it's not empty.
+func Trans(ctx context.Context, client *translate.Client, input string,
+	targetLang, sourceLang language.Tag) (translatedText string, detectecSource string, err error) {
 	options := &translate.Options{
 		Source: sourceLang,
 		Format: translate.Text,
@@ -34,14 +40,18 @@ func Trans(ctx context.Context, client *translate.Client, input string, targetLa
 	}
 	resp, err := client.Translate(ctx, []string{input}, targetLang, options)
 	if err != nil {
-		return "", fmt.Errorf("failed to translate: %w", err)
+		return "", "", fmt.Errorf("failed to translate: %w", err)
 	}
 	if len(resp) == 0 {
-		return "", fmt.Errorf("empty response")
+		return "", "", fmt.Errorf("empty response")
 	}
-	return resp[0].Text, nil
+	if resp[0].Source != (language.Tag{}) {
+		sourceLang = resp[0].Source
+	}
+	return resp[0].Text, sourceLang.String(), nil
 }
 
-func TransAuto(ctx context.Context, client *translate.Client, input string, targetLang language.Tag) (string, error) {
+func TransAuto(ctx context.Context, client *translate.Client, input string,
+	targetLang language.Tag) (translatedText string, detectecSource string, err error) {
 	return Trans(ctx, client, input, targetLang, language.Tag{})
 }
