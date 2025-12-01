@@ -12,6 +12,7 @@ import (
 	"io"
 	"io/fs"
 	"math"
+	"math/big"
 	"mime"
 	"os"
 	"reflect"
@@ -552,4 +553,14 @@ outer:
 		}
 	}
 	return sb.String()
+}
+
+// Return cryptographically secure random int64 of [min, max] range.
+func RandInt(min, max int64) int64 {
+	upperBound := big.NewInt(max - min + 1)
+	i, err := rand.Int(rand.Reader, upperBound)
+	if err != nil {
+		panic(err)
+	}
+	return min + i.Int64()
 }

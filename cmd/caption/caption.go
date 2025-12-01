@@ -85,6 +85,8 @@ var captionCmd = &cobra.Command{
 	Short: "Generate captions for images in a directory",
 	Long: `This command generates captions for all images in a specified directory using the Gemini API.
 
+It requires GEMINI_API_KEY env.
+
 It saves the caption of each image file to <filename>.txt file of the same dir.`,
 	Args: cobra.ExactArgs(1),
 	RunE: caption,

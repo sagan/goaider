@@ -17,8 +17,9 @@ import (
 	"github.com/natefinch/atomic"
 	"github.com/richinsley/comfy2go/client"
 	"github.com/richinsley/comfy2go/graphapi"
-	"github.com/sagan/goaider/util"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/sagan/goaider/util"
 )
 
 // Try to extract addr (hostname) & port from a rawUrl,
@@ -66,7 +67,7 @@ type ComfyuiOutput struct {
 	Data     []byte // image data
 	Filename string // unique filename. format: "cu-<hash>png". hash is sha256 url-safe base64.
 	Text     string // exists if it's "text" type data output
-	Type     string // "output"
+	Type     string // "output", "input"
 }
 
 type ComfyuiOutputs []*ComfyuiOutput
@@ -118,6 +119,7 @@ func (outputs ComfyuiOutputs) SaveAll(dir string, force bool) error {
 	return lastErr
 }
 
+// generate a global unique "cu-<hash>.png" style filename for a ComfyUI output file.
 func genFilename(data []byte, output *client.DataOutput) string {
 	s := sha256.New()
 	s.Write(data)
@@ -129,7 +131,7 @@ func genFilename(data []byte, output *client.DataOutput) string {
 // RunWorkflow runs a ComfyUI workflow and returns the outputs.
 // It initializes the client, queues the prompt, and waits for the workflow to complete,
 // collecting any image or GIF outputs.
-// Each item in returned outputs have unique filename.
+// Each item in returned outputs have global unique filename.
 func RunWorkflow(comfyClient *client.ComfyClient,
 	graph *graphapi.Graph) (outputs ComfyuiOutputs, err error) {
 	// queue the prompt and get the resulting image
@@ -229,4 +231,111 @@ func NewGraph(comfyClient *client.ComfyClient, filename string) (graph *graphapi
 		graph, _, err = comfyClient.NewGraphFromPNGReader(bytes.NewReader(data))
 	}
 	return graph, err
+}
+
+// accessor: currently only a single array index is supported;
+// in the future it may support deep attribute like "foo.bar.baz".
+// value should either string or int.
+// Special values: "<rand>" : a random seed.
+func SetGraphNodeWidetValue(graph *graphapi.Graph, nodeId int, accessor string, value any) (err error) {
+	node := graph.GetNodeById(nodeId)
+	if node == nil {
+		return fmt.Errorf("node %d not found", nodeId)
+	}
+	if node.WidgetValues == nil {
+		return fmt.Errorf("node %d has no widget values", nodeId)
+	}
+	// widgets_values can be an array of values, or a map of values maps of values can represent
+	// cascading style properties in which the setting of one property makes certain other properties available.
+	// Only array values is supported at this time.
+	arr, ok := node.WidgetValues.([]any)
+	if !ok {
+		return fmt.Errorf("node %d widget values is not an array", nodeId)
+	}
+	index, err := strconv.Atoi(accessor)
+	if err != nil {
+		return fmt.Errorf("accessor is not int")
+	}
+	if index < 0 || index >= len(arr) {
+		return fmt.Errorf("index %d out of bounds for node %d widget values (len %d)", index, nodeId, len(arr))
+	}
+
+	if str, ok := value.(string); ok {
+		if str == "<rand>" {
+			value = RandSeed()
+		}
+	}
+
+	// if new value and existing value has different types (string / number), coalesce value to match existing type
+	switch arr[index].(type) {
+	case string:
+		if v, isString := value.(string); isString {
+			arr[index] = v
+		} else {
+			arr[index] = fmt.Sprintf("%v", value)
+		}
+	case float64: // JSON unmarshals numbers to float64 by default
+		if v, isFloat := value.(float64); isFloat {
+			arr[index] = v
+		} else if v, isInt := value.(int); isInt {
+			arr[index] = float64(v)
+		} else if v, isString := value.(string); isString {
+			if fv, err := strconv.ParseFloat(v, 64); err == nil {
+				arr[index] = fv
+			} else {
+				return fmt.Errorf("cannot convert string %q to float64 for node %d widget value at index %d", v, nodeId, index)
+			}
+		} else {
+			return fmt.Errorf("unsupported value type for float64 target at node %d widget value at index %d", nodeId, index)
+		}
+	case bool:
+		if v, isBool := value.(bool); isBool {
+			arr[index] = v
+		} else if v, isString := value.(string); isString {
+			if bv, err := strconv.ParseBool(v); err == nil {
+				arr[index] = bv
+			} else {
+				return fmt.Errorf("cannot convert string %q to bool for node %d widget value at index %d", v, nodeId, index)
+			}
+		} else {
+			return fmt.Errorf("unsupported value type for bool target at node %d widget value at index %d", nodeId, index)
+		}
+	default:
+		// Fallback for other types, attempt direct assignment
+		arr[index] = value
+	}
+	node.WidgetValues = arr
+	return nil
+}
+
+// Return a random seed for ComfyUI of range [0, 2⁵³ - 1].
+// The upper bound is capped to the MAX_SAFE_ITNEGER (IEEE float64 precision bits) of JavaScript for compability.
+func RandSeed() int64 {
+	return util.RandInt(0, 9007199254740991)
+}
+
+// values item format: "node_id:index:value", e.g. "42:0:foo.png"
+func SetGraphNodeWeightValues(graph *graphapi.Graph, values []string) error {
+	for _, item := range values {
+		parts := strings.SplitN(item, ":", 3)
+		if len(parts) != 3 {
+			return fmt.Errorf("invalid value format: %s, expected 'node_id:index:value'", item)
+		}
+
+		nodeID, err := strconv.Atoi(parts[0])
+		if err != nil {
+			return fmt.Errorf("invalid node ID %q: %w", parts[0], err)
+		}
+
+		accessor := parts[1] // This is the index as a string
+
+		// Attempt to infer type for the value.
+		// For now, we'll pass it as a string and let SetGraphNodeWidetValue handle conversion.
+		value := parts[2]
+
+		if err := SetGraphNodeWidetValue(graph, nodeID, accessor, value); err != nil {
+			return fmt.Errorf("failed to set widget value for node %d, accessor %s: %w", nodeID, accessor, err)
+		}
+	}
+	return nil
 }
