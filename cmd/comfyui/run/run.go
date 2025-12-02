@@ -65,8 +65,12 @@ func doRun(cmd *cobra.Command, args []string) (err error) {
 			return fmt.Errorf("failed to set graph node widget values: %w", err)
 		}
 	}
+	err = client.PrepareGraph(graph)
+	if err != nil {
+		return fmt.Errorf("failed to prepare graph: %w", err)
+	}
 
-	outputs, err := api.RunWorkflow(client, graph)
+	outputs, err := client.RunWorkflow(graph)
 	if err != nil {
 		return err
 	}
@@ -80,9 +84,9 @@ func doRun(cmd *cobra.Command, args []string) (err error) {
 	} else {
 		err = outputs.SaveAll(flagOutputDir, flagForce)
 	}
-
 	if err != nil {
 		return err
 	}
+
 	return nil
 }

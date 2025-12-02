@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"cmp"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/csv"
 	"encoding/json"
 	"encoding/xml"
@@ -563,4 +564,19 @@ func RandInt(min, max int64) int64 {
 		panic(err)
 	}
 	return min + i.Int64()
+}
+
+func Sha256sumFile(filename string) (hexString string, err error) {
+	f, err := os.Open(filename)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }

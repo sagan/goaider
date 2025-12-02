@@ -297,8 +297,13 @@ func doIndex(dir string, allowedExts []string) (filelist FileList, err error) {
 			return err
 		}
 
-		// Skip directories, we only index files
+		// Skip directories and hidden files, we only index files
 		if d.IsDir() {
+			if strings.HasPrefix(d.Name(), ".") {
+				return filepath.SkipDir
+			}
+			return nil
+		} else if strings.HasPrefix(d.Name(), ".") {
 			return nil
 		}
 

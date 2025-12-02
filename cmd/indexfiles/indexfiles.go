@@ -3,11 +3,13 @@ package indexfiles
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 
+	"github.com/natefinch/atomic"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
@@ -81,6 +83,11 @@ func init() {
 }
 
 func indexfiles(cmd *cobra.Command, args []string) (err error) {
+	if flagOutput != "-" {
+		if exists, err := util.FileExists(flagOutput); err != nil || (exists && !flagForce) {
+			return fmt.Errorf("output file %q exists or can't access, err=%w", flagOutput, err)
+		}
+	}
 	argInput := args[0]
 	flagPrefix = strings.TrimSuffix(flagPrefix, "_")
 	flagExtensions = util.Map(flagExtensions, func(ext string) string { return strings.TrimPrefix(ext, ".") })
@@ -145,21 +152,16 @@ func indexfiles(cmd *cobra.Command, args []string) (err error) {
 		}
 	}
 
-	var output *os.File
+	reader, writer := io.Pipe()
+	go func() {
+		err = filelist.SaveCsv(writer, flagPrefix, includes)
+		writer.CloseWithError(err)
+	}()
 	if flagOutput == "-" {
-		output = os.Stdout
+		_, err = io.Copy(os.Stdout, reader)
 	} else {
-		if exists, err := util.FileExists(flagOutput); err != nil || (exists && !flagForce) {
-			return fmt.Errorf("output file %q exists or can't access, err=%w", flagOutput, err)
-		}
-		output, err = os.Create(flagOutput)
-		if err != nil {
-			return err
-		}
-		defer output.Close()
+		err = atomic.WriteFile(flagOutput, reader)
 	}
-
-	err = filelist.SaveCsv(output, flagPrefix, includes)
 	if err != nil {
 		return err
 	}

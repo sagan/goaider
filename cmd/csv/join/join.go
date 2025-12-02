@@ -2,9 +2,11 @@ package join
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
+	"github.com/natefinch/atomic"
 	"github.com/spf13/cobra"
 
 	"github.com/sagan/goaider/cmd/csv"
@@ -40,6 +42,11 @@ var (
 )
 
 func join(cmd *cobra.Command, args []string) (err error) {
+	if csv.FlagOutput != "" && csv.FlagOutput != "-" {
+		if exists, err := util.FileExists(csv.FlagOutput); err != nil || (exists && !csv.FlagForce) {
+			return fmt.Errorf("output file %q exists or can't access, err=%w", csv.FlagOutput, err)
+		}
+	}
 	argLeftCsv := args[0]
 	argRightCsv := args[1]
 	leftOn := ""
@@ -62,24 +69,21 @@ func join(cmd *cobra.Command, args []string) (err error) {
 		flagRightPrefix = strings.TrimSuffix(flagRightPrefix, "_") + "_"
 	}
 
-	var output *os.File
+	reader, writer := io.Pipe()
+	go func() {
+		err := joinCsvFiles(argLeftCsv, argRightCsv, writer, leftOn, rightOn,
+			flagLeftPrefix, flagRightPrefix, flagFullJoin, csv.FlagNoHeader)
+		writer.CloseWithError(err)
+	}()
 	if csv.FlagOutput == "-" {
-		output = os.Stdout
+		_, err = io.Copy(os.Stdout, reader)
 	} else {
-		if exists, err := util.FileExists(csv.FlagOutput); err != nil || (exists && !csv.FlagForce) {
-			return fmt.Errorf("output file %q exists or can't access, err=%w", csv.FlagOutput, err)
-		}
-		output, err = os.Create(csv.FlagOutput)
-		if err != nil {
-			return nil
-		}
-		defer output.Close()
+		err = atomic.WriteFile(csv.FlagOutput, reader)
 	}
-	err = joinCsvFiles(argLeftCsv, argRightCsv, output, leftOn, rightOn,
-		flagLeftPrefix, flagRightPrefix, flagFullJoin, csv.FlagNoHeader)
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 

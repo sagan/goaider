@@ -112,6 +112,8 @@ func doPaste(cmd *cobra.Command, args []string) (err error) {
 		return err
 	}
 
-	fmt.Print(fullpath)
+	if argFilename != "-" {
+		fmt.Print(fullpath)
+	}
 	return nil
 }

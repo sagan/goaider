@@ -13,6 +13,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mithrandie/csvq-driver"
+	"github.com/natefinch/atomic"
 	"github.com/spf13/cobra"
 
 	csvCmd "github.com/sagan/goaider/cmd/csv"
@@ -56,6 +57,11 @@ var (
 )
 
 func query(cmd *cobra.Command, args []string) (err error) {
+	if csvCmd.FlagOutput != "" && csvCmd.FlagOutput != "-" {
+		if exists, err := util.FileExists(csvCmd.FlagOutput); err != nil || (exists && !csvCmd.FlagForce) {
+			return fmt.Errorf("output file %q exists or can't access, err=%w", csvCmd.FlagOutput, err)
+		}
+	}
 	if flagTemplate != "" {
 		flagText = true
 	}
@@ -78,24 +84,19 @@ func query(cmd *cobra.Command, args []string) (err error) {
 		return err
 	}
 
-	var output *os.File
+	reader, writer := io.Pipe()
+	go func() {
+		if flagText {
+			err = writeSqlRowsToText(rows, writer, flagTemplate, flagOneLine)
+		} else {
+			err = writeSqlRowsToCsv(rows, writer, csvCmd.FlagNoHeader, flagOneLine)
+		}
+		writer.CloseWithError(err)
+	}()
 	if csvCmd.FlagOutput == "-" {
-		output = os.Stdout
+		_, err = io.Copy(os.Stdout, reader)
 	} else {
-		if exists, err := util.FileExists(csvCmd.FlagOutput); err != nil || (exists && !csvCmd.FlagForce) {
-			return fmt.Errorf("output file %q exists or access failed. err: %w", csvCmd.FlagOutput, err)
-		}
-		output, err = os.Create(csvCmd.FlagOutput)
-		if err != nil {
-			return err
-		}
-		defer output.Close()
-	}
-
-	if flagText {
-		err = writeSqlRowsToText(rows, output, flagTemplate, flagOneLine)
-	} else {
-		err = writeSqlRowsToCsv(rows, output, csvCmd.FlagNoHeader, flagOneLine)
+		err = atomic.WriteFile(csvCmd.FlagOutput, reader)
 	}
 	if err != nil {
 		return err

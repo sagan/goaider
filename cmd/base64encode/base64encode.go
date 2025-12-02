@@ -33,13 +33,17 @@ var (
 	flagInput   string // Read from input file instead. "-" for stdin
 )
 
-func doBase64encode(cmd *cobra.Command, args []string) error {
-	var input []byte
-	var err error
-
+func doBase64encode(cmd *cobra.Command, args []string) (err error) {
+	if flagOutput != "-" {
+		if exists, err := util.FileExists(flagOutput); err != nil || (exists && !flagForce) {
+			return fmt.Errorf("output file %q exists or access failed. err: %w", flagOutput, err)
+		}
+	}
 	if len(args) > 0 && flagInput != "" {
 		return fmt.Errorf("cannot use both [text] argument and --input flag")
 	}
+
+	var input []byte
 	if len(args) > 0 {
 		input = []byte(args[0])
 	} else if flagInput == "-" {
@@ -87,9 +91,6 @@ func doBase64encode(cmd *cobra.Command, args []string) error {
 	if flagOutput == "-" {
 		_, err = os.Stdout.WriteString(encoded)
 	} else {
-		if exists, err := util.FileExists(flagOutput); err != nil || (exists && !flagForce) {
-			return fmt.Errorf("output file %q exists or access failed. err: %w", flagOutput, err)
-		}
 		reader := strings.NewReader(encoded)
 		err = atomic.WriteFile(flagOutput, reader)
 	}

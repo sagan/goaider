@@ -2,10 +2,14 @@ package rand
 
 import (
 	"fmt"
+	"os"
+	"strings"
+
+	"github.com/natefinch/atomic"
+	"github.com/spf13/cobra"
 
 	"github.com/sagan/goaider/cmd"
 	"github.com/sagan/goaider/util"
-	"github.com/spf13/cobra"
 )
 
 var randCmd = &cobra.Command{
@@ -19,17 +23,38 @@ It outputs to stdout.`,
 }
 
 var (
-	flagLength    int  // output length, default is 22 (130 bit security)
+	flagForce     bool
 	flagDigitOnly bool // output digits ([0-9]) only
+	flagLength    int  // output length, default is 22 (130 bit security)
+	flagOutput    string
 )
 
-func doRand(cmd *cobra.Command, args []string) error {
-	fmt.Print(util.RandString(flagLength, flagDigitOnly))
+func doRand(cmd *cobra.Command, args []string) (err error) {
+	if flagOutput != "-" {
+		if exists, err := util.FileExists(flagOutput); err != nil || (exists && !flagForce) {
+			return fmt.Errorf("output file %q exists or can't access, err=%w", flagOutput, err)
+		}
+	}
+	if flagLength <= 0 {
+		return fmt.Errorf("length must be greater than 0")
+	}
+
+	data := util.RandString(flagLength, flagDigitOnly)
+	if flagOutput == "-" {
+		_, err = os.Stdout.WriteString(data)
+	} else {
+		err = atomic.WriteFile(flagOutput, strings.NewReader(data))
+	}
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
 func init() {
 	randCmd.Flags().IntVarP(&flagLength, "length", "l", 22, "Length of the random string")
 	randCmd.Flags().BoolVarP(&flagDigitOnly, "digits", "d", false, "Output digits only")
+	randCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Force overwriting without confirmation")
+	randCmd.Flags().StringVarP(&flagOutput, "output", "o", "-", `Output file path. Use "-" for stdout`)
 	cmd.RootCmd.AddCommand(randCmd)
 }

@@ -155,7 +155,7 @@ func doTranslate(cmd *cobra.Command, args []string) (err error) {
 		return nil
 	}
 
-	if flagOutput != "" {
+	if flagOutput != "-" {
 		if exists, err := util.FileExists(flagOutput); err != nil || (exists && !flagForce) {
 			return fmt.Errorf("output file %q exists or access failed. err: %w", flagOutput, err)
 		}
@@ -196,12 +196,12 @@ func doTranslate(cmd *cobra.Command, args []string) (err error) {
 		clipboard.CopyString(response)
 	}
 	if flagOutput == "-" {
-		fmt.Printf("%s\n", response)
+		_, err = fmt.Print(response)
 	} else {
 		err = atomic.WriteFile(flagOutput, strings.NewReader(translatedText))
-		if err != nil {
-			return err
-		}
+	}
+	if err != nil {
+		return err
 	}
 
 	return nil

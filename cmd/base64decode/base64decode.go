@@ -35,14 +35,16 @@ var (
 )
 
 func doBase64decode(cmd *cobra.Command, args []string) (err error) {
-	var inputReader io.Reader
-	var outputWriter io.Writer
-
 	if len(args) > 0 && flagInput != "" {
 		return fmt.Errorf("cannot use both [base64_string] argument and --input flag")
 	}
+	if flagOutput != "-" {
+		if exists, err := util.FileExists(flagOutput); err != nil || (exists && !flagForce) {
+			return fmt.Errorf("output file %q exists or access failed. err: %w", flagOutput, err)
+		}
+	}
 
-	// Determine input source
+	var inputReader io.Reader
 	if flagInput != "" {
 		if flagInput == "-" {
 			inputReader = os.Stdin
@@ -56,17 +58,6 @@ func doBase64decode(cmd *cobra.Command, args []string) (err error) {
 		inputReader = strings.NewReader(args[0])
 	} else {
 		return fmt.Errorf("no input provided. Use 'base64decode [string]' or 'base64decode -i <file>'")
-	}
-
-	// Determine output destination
-	if flagOutput == "-" {
-		outputWriter = os.Stdout
-	} else {
-		outputWriter, err = os.Create(flagOutput)
-		if err != nil {
-			return fmt.Errorf("failed to create output file %q: %w", flagOutput, err)
-		}
-		defer outputWriter.(*os.File).Close()
 	}
 
 	inputBytes, err := io.ReadAll(inputReader)
@@ -94,9 +85,6 @@ func doBase64decode(cmd *cobra.Command, args []string) (err error) {
 		}
 		_, err = os.Stdout.Write(decodedBytes)
 	} else {
-		if exists, err := util.FileExists(flagOutput); err != nil || (exists && !flagForce) {
-			return fmt.Errorf("output file %q exists or access failed. err: %w", flagOutput, err)
-		}
 		reader := bytes.NewReader(decodedBytes)
 		err = atomic.WriteFile(flagOutput, reader)
 	}

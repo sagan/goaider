@@ -61,12 +61,16 @@ func init() {
 	cmd.RootCmd.AddCommand(genlistCmd)
 }
 
-func runSovitsGenlist(cmd *cobra.Command, args []string) error {
+func runSovitsGenlist(cmd *cobra.Command, args []string) (err error) {
+	if flagOutput != "-" {
+		if exists, err := util.FileExists(flagOutput); err != nil || (exists && !flagForce) {
+			return fmt.Errorf("output file %q already exists or access error. err: %w", flagOutput, err)
+		}
+	}
 	if !strings.HasPrefix(flagExt, ".") {
 		flagExt = "." + flagExt
 	}
 	argDir := args[0]
-	var err error
 	// Validate language
 	validLangs := map[string]bool{"zh": true, "ja": true, "en": true, "ko": true, "yue": true}
 	if !validLangs[flagLang] {
@@ -77,12 +81,6 @@ func runSovitsGenlist(cmd *cobra.Command, args []string) error {
 	absDirPath, err := filepath.Abs(argDir)
 	if err != nil {
 		return fmt.Errorf("failed to get absolute path for directory %q: %w", argDir, err)
-	}
-
-	if flagOutput != "-" {
-		if exists, err := util.FileExists(flagOutput); err != nil || (exists && !flagForce) {
-			return fmt.Errorf("output file %q already exists or access error. err: %w", flagOutput, err)
-		}
 	}
 
 	// Read directory contents
@@ -140,10 +138,10 @@ func runSovitsGenlist(cmd *cobra.Command, args []string) error {
 		}
 		writer.Close()
 	}()
-	if flagOutput != "-" {
-		err = atomic.WriteFile(flagOutput, reader)
-	} else {
+	if flagOutput == "-" {
 		_, err = io.Copy(os.Stdout, reader)
+	} else {
+		err = atomic.WriteFile(flagOutput, reader)
 	}
 	if err != nil {
 		return fmt.Errorf("failed to output to %q : %w", flagOutput, err)

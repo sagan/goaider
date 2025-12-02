@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -22,44 +23,84 @@ import (
 	"github.com/sagan/goaider/util"
 )
 
+// ComfyUI "LoadImage" node, widgets_values[0] is the filename that must be uploaded to server "input/" folder first.
+const NODE_TYPE_LOAD_IMAGE = "LoadImage"
+
+const NODE_TYPE_SAVE_VIDEO = "SaveVideo"
+
 // Try to extract addr (hostname) & port from a rawUrl,
-// which could be "127.0.0.1:80" or "http://127.0.0.1:8080" format.
-func ParseAddrFromUrl(rawURL string) (addr string, port int, err error) {
+// which could be "127.0.0.1:8188" or "http://127.0.0.1:8188" format.
+// Return: "http", "127.0.0.1", 8188.
+func parseAddrFromUrl(rawURL string) (schema string, addr string, port int, err error) {
 	if !strings.HasPrefix(rawURL, "http:") && !strings.HasPrefix(rawURL, "https:") {
 		rawURL = "http://" + rawURL
 	}
 	urlObj, err := url.Parse(rawURL)
 	if err != nil {
-		return "", 0, err
+		return "", "", 0, err
 	}
 	if urlObj.Port() == "" {
 		if urlObj.Scheme == "https" {
-			return urlObj.Hostname(), 443, nil
+			return urlObj.Scheme, urlObj.Hostname(), 443, nil
 		} else {
-			return urlObj.Hostname(), 80, nil
+			return urlObj.Scheme, urlObj.Hostname(), 80, nil
 		}
 	}
 	port, err = strconv.Atoi(urlObj.Port())
 	if err != nil {
-		return urlObj.Hostname(), 0, err
+		return urlObj.Scheme, urlObj.Hostname(), 0, err
 	}
-	return urlObj.Hostname(), port, nil
+	return urlObj.Scheme, urlObj.Hostname(), port, nil
 }
 
-// clientaddr : "127.0.0.1:1080" or "http://127.0.0.1:1080" .
-func CreateAndInitComfyClient(clientaddr string) (comfyClient *client.ComfyClient, err error) {
-	addr, port, err := ParseAddrFromUrl(clientaddr)
+// 这个 client.ComfyClient 真 TMD 难用。
+type Client struct {
+	*client.ComfyClient
+	Base string // Base addr. E.g. "http://127.0.0.1:8188"
+}
+
+// fileType: input | output.
+func (c *Client) CheckFileExists(filename string, fileType client.ImageType) (exists bool, err error) {
+	params := url.Values{}
+	params.Add("filename", filename)
+	params.Add("type", string(fileType))
+	resp, err := http.DefaultClient.Get(fmt.Sprintf("%s/view?%s", c.Base, params.Encode()))
+	if err != nil {
+		return false, err
+	}
+	exists = resp.StatusCode == 200
+	return exists, nil
+}
+
+func (c *Client) CheckInputFileExists(filename string) (exists bool, err error) {
+	return c.CheckFileExists(filename, client.InputImageType)
+}
+
+// clientaddr : "127.0.0.1:8188" or "http://127.0.0.1:8188" .
+func CreateAndInitComfyClient(clientaddr string) (comfyClient *Client, err error) {
+	schema, addr, port, err := parseAddrFromUrl(clientaddr)
 	if err != nil {
 		return nil, err
 	}
-	comfyClient = client.NewComfyClient(addr, port, nil)
-	if !comfyClient.IsInitialized() {
-		err = comfyClient.Init()
+	if schema != "http" && schema != "https" {
+		return nil, fmt.Errorf("unsupported schema: %s", schema)
+	}
+	interClient := client.NewComfyClient(addr, port, nil)
+	if !interClient.IsInitialized() {
+		err = interClient.Init()
 		if err != nil {
 			return nil, err
 		}
 	}
-	return comfyClient, nil
+	base := schema + "://" + addr
+	if schema == "http" && port != 80 || schema == "https" && port != 443 {
+		base = fmt.Sprintf("%s:%d", base, port)
+	}
+
+	return &Client{
+		ComfyClient: interClient,
+		Base:        base,
+	}, nil
 }
 
 // comfyui output file
@@ -128,18 +169,79 @@ func genFilename(data []byte, output *client.DataOutput) string {
 	return "cu-" + b64 + ext
 }
 
+// Ensure all input images in graph exists in ComfyUI server, upload missing files
+// node: LoadImage .
+// filename: widgets_values[0].
+// Note: it modify the graph.
+func (comfyClient *Client) PrepareGraph(graph *graphapi.Graph) (err error) {
+	for _, node := range graph.Nodes {
+		if node.Type != NODE_TYPE_LOAD_IMAGE || node.WidgetValues == nil {
+			continue
+		}
+		weightValues, ok := node.WidgetValues.([]any)
+		if !ok || len(weightValues) == 0 {
+			log.Warnf("node %d (LoadImage) has no widget values", node.ID)
+			continue
+		}
+		filename, ok := weightValues[0].(string)
+		if !ok {
+			log.Warnf("node %d (LoadImage) has no filename in widget values", node.ID)
+			continue
+		}
+		hash, err := util.Sha256sumFile(filename)
+		if err != nil {
+			return fmt.Errorf("failed to calc input image %q hash: %w", filename, err)
+		}
+		serverFilename := hash + filepath.Ext(filename)
+		log.Printf("check image %q => %q", filename, serverFilename)
+		exists, err := comfyClient.CheckInputFileExists(serverFilename)
+		if err != nil {
+			return fmt.Errorf("failed to check if input file filename %q (%q) exists: %w", filename, serverFilename, err)
+		}
+		if !exists {
+			log.Printf("uploading input file %q => %q", filename, serverFilename)
+			file, err := os.Open(filename)
+			if err != nil {
+				return err
+			}
+			defer file.Close()
+			_, err = comfyClient.UploadFileFromReader(file, serverFilename, false, client.InputImageType, "", nil)
+			if err != nil {
+				return fmt.Errorf("failed to upload input file %q: %w", filename, err)
+			}
+			err = SetGraphNodeWidetValue(graph, node.ID, "0", serverFilename)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	for _, node := range graph.Nodes {
+		switch node.Type {
+		case NODE_TYPE_SAVE_VIDEO: // comfy2go doesn't handle this node
+			node.Properties["filename_prefix"] = *graphapi.NewPropertyFromInput("filename_prefix",
+				false, &node.WidgetValues, 0)
+			node.Properties["format"] = *graphapi.NewPropertyFromInput("format",
+				false, &node.WidgetValues, 1)
+			node.Properties["codec"] = *graphapi.NewPropertyFromInput("codec",
+				false, &node.WidgetValues, 2)
+		case NODE_TYPE_LOAD_IMAGE: // we changed the filename. so property must be re-calculated.
+		}
+	}
+	return nil
+}
+
 // RunWorkflow runs a ComfyUI workflow and returns the outputs.
 // It initializes the client, queues the prompt, and waits for the workflow to complete,
 // collecting any image or GIF outputs.
 // Each item in returned outputs have global unique filename.
-func RunWorkflow(comfyClient *client.ComfyClient,
-	graph *graphapi.Graph) (outputs ComfyuiOutputs, err error) {
+func (comfyClient *Client) RunWorkflow(graph *graphapi.Graph) (outputs ComfyuiOutputs, err error) {
 	// queue the prompt and get the resulting image
 	item, err := comfyClient.QueuePrompt(graph)
 	if err != nil {
 		return nil, fmt.Errorf("failed to queue prompt: %w", err)
 	}
 
+	log.Printf("Running workflow")
 	// continuously read messages from the QueuedItem until we get the "stopped" message type
 	for continueLoop := true; continueLoop; {
 		msg := <-item.Messages
@@ -186,7 +288,7 @@ func RunWorkflow(comfyClient *client.ComfyClient,
 }
 
 // Load graph from filename, if it's "-", read from stdin.
-func NewGraph(comfyClient *client.ComfyClient, filename string) (graph *graphapi.Graph, err error) {
+func NewGraph(comfyClient *Client, filename string) (graph *graphapi.Graph, err error) {
 	var data []byte
 	if filename == "-" {
 		data, err = io.ReadAll(os.Stdin)
@@ -231,6 +333,30 @@ func NewGraph(comfyClient *client.ComfyClient, filename string) (graph *graphapi
 		graph, _, err = comfyClient.NewGraphFromPNGReader(bytes.NewReader(data))
 	}
 	return graph, err
+}
+
+func GetGraphNodeWidetValue(graph *graphapi.Graph, nodeId int, accessor string) (value any, err error) {
+	node := graph.GetNodeById(nodeId)
+	if node == nil {
+		return nil, fmt.Errorf("node %d not found", nodeId)
+	}
+	if node.WidgetValues == nil {
+		return nil, fmt.Errorf("node %d has no widget values", nodeId)
+	}
+
+	arr, ok := node.WidgetValues.([]any)
+	if !ok {
+		return nil, fmt.Errorf("node %d widget values is not an array", nodeId)
+	}
+	index, err := strconv.Atoi(accessor)
+	if err != nil {
+		return nil, fmt.Errorf("accessor is not int")
+	}
+	if index < 0 || index >= len(arr) {
+		return nil, fmt.Errorf("index %d out of bounds for node %d widget values (len %d)", index, nodeId, len(arr))
+	}
+
+	return arr[index], nil
 }
 
 // accessor: currently only a single array index is supported;

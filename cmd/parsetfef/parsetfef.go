@@ -46,6 +46,11 @@ func init() {
 }
 
 func parsetfef(cmd *cobra.Command, args []string) (err error) {
+	if flagOutput != "-" {
+		if exists, err := util.FileExists(flagOutput); err != nil || (exists || !flagForce) {
+			return fmt.Errorf("output file %q exists or access failed. err: %w", flagOutput, err)
+		}
+	}
 	r, err := ingest.NewIngester("file", args[0])
 	if err != nil {
 		return err
@@ -58,31 +63,21 @@ func parsetfef(cmd *cobra.Command, args []string) (err error) {
 	}
 	run := r.GetRun()
 
-	if flagOutput != "-" {
-		if exists, err := util.FileExists(flagOutput); err != nil || (exists || !flagForce) {
-			return fmt.Errorf("output file %q exists or access failed. err: %w", flagOutput, err)
-		}
-		reader, writer := io.Pipe()
+	reader, writer := io.Pipe()
+	go func() {
+		var err error
 		if flagHumanReadable {
-			go func() {
-				err := util.PrintScalarsTable(writer, run.Scalars)
-				writer.CloseWithError(err)
-			}()
+			err = util.PrintScalarsTable(writer, run.Scalars)
 		} else {
-			go func() {
-				err := util.SaveScalarsToCSV(writer, run.Scalars)
-				writer.CloseWithError(err)
-			}()
+			err = util.SaveScalarsToCSV(writer, run.Scalars)
 		}
-		err = atomic.WriteFile(flagOutput, reader)
+		writer.CloseWithError(err)
+	}()
+	if flagOutput == "-" {
+		_, err = io.Copy(os.Stdout, reader)
 	} else {
-		if flagHumanReadable {
-			err = util.PrintScalarsTable(os.Stdout, run.Scalars)
-		} else {
-			err = util.SaveScalarsToCSV(os.Stdout, run.Scalars)
-		}
+		err = atomic.WriteFile(flagOutput, reader)
 	}
-
 	if err != nil {
 		return err
 	}
