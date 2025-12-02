@@ -5,6 +5,7 @@ import (
 	"cmp"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/csv"
 	"encoding/json"
 	"encoding/xml"
@@ -566,7 +567,8 @@ func RandInt(min, max int64) int64 {
 	return min + i.Int64()
 }
 
-func Sha256sumFile(filename string) (hexString string, err error) {
+// If hex is true, return hex string; otherwise return URL-safe base64
+func Sha256sumFile(filename string, hex bool) (string string, err error) {
 	f, err := os.Open(filename)
 	if err != nil {
 		return "", err
@@ -578,5 +580,9 @@ func Sha256sumFile(filename string) (hexString string, err error) {
 		return "", err
 	}
 
-	return fmt.Sprintf("%x", h.Sum(nil)), nil
+	if hex {
+		return fmt.Sprintf("%x", h.Sum(nil)), nil
+	} else {
+		return strings.TrimRight(base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(h.Sum(nil)), "="), nil
+	}
 }

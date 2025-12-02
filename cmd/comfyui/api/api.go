@@ -188,7 +188,7 @@ func (comfyClient *Client) PrepareGraph(graph *graphapi.Graph) (err error) {
 			log.Warnf("node %d (LoadImage) has no filename in widget values", node.ID)
 			continue
 		}
-		hash, err := util.Sha256sumFile(filename)
+		hash, err := util.Sha256sumFile(filename, false)
 		if err != nil {
 			return fmt.Errorf("failed to calc input image %q hash: %w", filename, err)
 		}
@@ -209,7 +209,7 @@ func (comfyClient *Client) PrepareGraph(graph *graphapi.Graph) (err error) {
 			if err != nil {
 				return fmt.Errorf("failed to upload input file %q: %w", filename, err)
 			}
-			err = SetGraphNodeWidetValue(graph, node.ID, "0", serverFilename)
+			err = SetGraphNodeWidetValue(graph, node.ID, "0", serverFilename, 0)
 			if err != nil {
 				return err
 			}
@@ -224,7 +224,7 @@ func (comfyClient *Client) PrepareGraph(graph *graphapi.Graph) (err error) {
 				false, &node.WidgetValues, 1)
 			node.Properties["codec"] = *graphapi.NewPropertyFromInput("codec",
 				false, &node.WidgetValues, 2)
-		case NODE_TYPE_LOAD_IMAGE: // we changed the filename. so property must be re-calculated.
+		case NODE_TYPE_LOAD_IMAGE: // we changed the filename, need to re-calculate properties?
 		}
 	}
 	return nil
@@ -245,6 +245,7 @@ func (comfyClient *Client) RunWorkflow(graph *graphapi.Graph) (outputs ComfyuiOu
 	// continuously read messages from the QueuedItem until we get the "stopped" message type
 	for continueLoop := true; continueLoop; {
 		msg := <-item.Messages
+		log.Printf("msg: %v", msg)
 		switch msg.Type {
 		case "stopped":
 			// if we were stopped for an exception, display the exception message
@@ -362,8 +363,8 @@ func GetGraphNodeWidetValue(graph *graphapi.Graph, nodeId int, accessor string) 
 // accessor: currently only a single array index is supported;
 // in the future it may support deep attribute like "foo.bar.baz".
 // value should either string or int.
-// Special values: "<rand>" : a random seed.
-func SetGraphNodeWidetValue(graph *graphapi.Graph, nodeId int, accessor string, value any) (err error) {
+// Special placeholder in value: "%seed%" : a random integer.
+func SetGraphNodeWidetValue(graph *graphapi.Graph, nodeId int, accessor string, value any, seed int64) (err error) {
 	node := graph.GetNodeById(nodeId)
 	if node == nil {
 		return fmt.Errorf("node %d not found", nodeId)
@@ -387,9 +388,7 @@ func SetGraphNodeWidetValue(graph *graphapi.Graph, nodeId int, accessor string, 
 	}
 
 	if str, ok := value.(string); ok {
-		if str == "<rand>" {
-			value = RandSeed()
-		}
+		value = strings.ReplaceAll(str, "%seed%", fmt.Sprint(seed))
 	}
 
 	// if new value and existing value has different types (string / number), coalesce value to match existing type
@@ -441,7 +440,7 @@ func RandSeed() int64 {
 }
 
 // values item format: "node_id:index:value", e.g. "42:0:foo.png"
-func SetGraphNodeWeightValues(graph *graphapi.Graph, values []string) error {
+func SetGraphNodeWeightValues(graph *graphapi.Graph, values []string, seed int64) error {
 	for _, item := range values {
 		parts := strings.SplitN(item, ":", 3)
 		if len(parts) != 3 {
@@ -459,7 +458,7 @@ func SetGraphNodeWeightValues(graph *graphapi.Graph, values []string) error {
 		// For now, we'll pass it as a string and let SetGraphNodeWidetValue handle conversion.
 		value := parts[2]
 
-		if err := SetGraphNodeWidetValue(graph, nodeID, accessor, value); err != nil {
+		if err := SetGraphNodeWidetValue(graph, nodeID, accessor, value, seed); err != nil {
 			return fmt.Errorf("failed to set widget value for node %d, accessor %s: %w", nodeID, accessor, err)
 		}
 	}
