@@ -4,6 +4,10 @@ go 1.24.0
 
 toolchain go1.24.10
 
+// Based on https://github.com/fengjiongmax/comfy2go
+// Mod to fix some problems. See @mod .
+replace github.com/richinsley/comfy2go => ./comfy2go
+
 require (
 	cloud.google.com/go/translate v1.12.7
 	github.com/c-bata/go-prompt v0.2.6

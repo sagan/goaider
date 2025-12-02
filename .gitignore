@@ -4,6 +4,7 @@
 *.exe
 /goaider
 /.local
+/.data
 
 # experiment files in root dir
 /*.csv

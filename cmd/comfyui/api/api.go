@@ -25,7 +25,7 @@ import (
 
 // ComfyUI "LoadImage" node, widgets_values[0] is the filename that must be uploaded to server "input/" folder first.
 const NODE_TYPE_LOAD_IMAGE = "LoadImage"
-
+const NODE_TYPE_LOAD_IMAGE_MASK = "LoadImageMask"
 const NODE_TYPE_SAVE_VIDEO = "SaveVideo"
 
 // Try to extract addr (hostname) & port from a rawUrl,
@@ -85,7 +85,7 @@ func CreateAndInitComfyClient(clientaddr string) (comfyClient *Client, err error
 	if schema != "http" && schema != "https" {
 		return nil, fmt.Errorf("unsupported schema: %s", schema)
 	}
-	interClient := client.NewComfyClient(addr, port, nil)
+	interClient := client.NewComfyClient(schema, addr, port, nil)
 	if !interClient.IsInitialized() {
 		err = interClient.Init()
 		if err != nil {
@@ -175,7 +175,7 @@ func genFilename(data []byte, output *client.DataOutput) string {
 // Note: it modify the graph.
 func (comfyClient *Client) PrepareGraph(graph *graphapi.Graph) (err error) {
 	for _, node := range graph.Nodes {
-		if node.Type != NODE_TYPE_LOAD_IMAGE || node.WidgetValues == nil {
+		if node.Type != NODE_TYPE_LOAD_IMAGE && node.Type != NODE_TYPE_LOAD_IMAGE_MASK || node.WidgetValues == nil {
 			continue
 		}
 		weightValues, ok := node.WidgetValues.([]any)
@@ -224,7 +224,8 @@ func (comfyClient *Client) PrepareGraph(graph *graphapi.Graph) (err error) {
 				false, &node.WidgetValues, 1)
 			node.Properties["codec"] = *graphapi.NewPropertyFromInput("codec",
 				false, &node.WidgetValues, 2)
-		case NODE_TYPE_LOAD_IMAGE: // we changed the filename, need to re-calculate properties?
+		case NODE_TYPE_LOAD_IMAGE, NODE_TYPE_LOAD_IMAGE_MASK:
+			// we changed the filename, need to re-calculate properties?
 		}
 	}
 	return nil
@@ -240,12 +241,17 @@ func (comfyClient *Client) RunWorkflow(graph *graphapi.Graph) (outputs ComfyuiOu
 	if err != nil {
 		return nil, fmt.Errorf("failed to queue prompt: %w", err)
 	}
+	defer func() {
+		go func() {
+			// read and discard all left message in item.Messages channel.
+			for range item.Messages {
+			}
+		}()
+	}()
 
-	log.Printf("Running workflow")
 	// continuously read messages from the QueuedItem until we get the "stopped" message type
 	for continueLoop := true; continueLoop; {
 		msg := <-item.Messages
-		log.Printf("msg: %v", msg)
 		switch msg.Type {
 		case "stopped":
 			// if we were stopped for an exception, display the exception message
@@ -281,8 +287,8 @@ func (comfyClient *Client) RunWorkflow(graph *graphapi.Graph) (outputs ComfyuiOu
 					return outputs, nil
 				}
 			}
-		default:
-			log.Printf("event %s: %v", msg.Type, msg.Message)
+		default: // progress
+			// log.Printf("event %s: %v", msg.Type, msg.Message)
 		}
 	}
 	return outputs, fmt.Errorf("comfyui server disconnected")
@@ -309,14 +315,14 @@ func NewGraph(comfyClient *Client, filename string) (graph *graphapi.Graph, err 
 		if err != nil {
 			return nil, err
 		}
-		// Skip some nodes that comfy2go doesn't yet support.
+		// Remove some nodes that comfy2go doesn't yet support.
 		// remove those nodes from obj.nodes array.
-		// unsupported nodes: node.type == "MarkdownNote"
 		if nodes, ok := obj["nodes"].([]any); ok {
 			var filteredNodes []any
 			for _, node := range nodes {
 				if nodeMap, isMap := node.(map[string]any); isMap {
-					if nodeType, typeOk := nodeMap["type"].(string); typeOk && nodeType == "MarkdownNote" {
+					if nodeType, typeOk := nodeMap["type"].(string); typeOk &&
+						(nodeType == "MarkdownNote" || nodeType == "Note") {
 						continue
 					}
 				}

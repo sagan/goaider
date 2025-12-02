@@ -56,14 +56,13 @@ func doRun(cmd *cobra.Command, args []string) (err error) {
 	}
 	argWorkflow := args[0]
 
+	client, err := api.CreateAndInitComfyClient(flagServer)
+	if err != nil {
+		return fmt.Errorf("failed to create client: %w", err)
+	}
+
 	for i := range flagBatch {
 		seed := api.RandSeed()
-
-		// comfy2go bug: must re-init every time otherwise it's dead lock.
-		client, err := api.CreateAndInitComfyClient(flagServer)
-		if err != nil {
-			return fmt.Errorf("failed to create client: %w", err)
-		}
 
 		graph, err := api.NewGraph(client, argWorkflow)
 		if err != nil {
