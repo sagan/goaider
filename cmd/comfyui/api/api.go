@@ -209,23 +209,19 @@ func (comfyClient *Client) PrepareGraph(graph *graphapi.Graph) (err error) {
 			if err != nil {
 				return fmt.Errorf("failed to upload input file %q: %w", filename, err)
 			}
-			err = SetGraphNodeWidetValue(graph, node.ID, "0", serverFilename, 0)
-			if err != nil {
-				return err
-			}
+		}
+		err = SetGraphNodeWidetValue(graph, node.ID, "0", serverFilename, 0)
+		if err != nil {
+			return err
 		}
 	}
 	for _, node := range graph.Nodes {
 		switch node.Type {
 		case NODE_TYPE_SAVE_VIDEO: // comfy2go doesn't handle this node
-			node.Properties["filename_prefix"] = *graphapi.NewPropertyFromInput("filename_prefix",
-				false, &node.WidgetValues, 0)
-			node.Properties["format"] = *graphapi.NewPropertyFromInput("format",
-				false, &node.WidgetValues, 1)
-			node.Properties["codec"] = *graphapi.NewPropertyFromInput("codec",
-				false, &node.WidgetValues, 2)
-		case NODE_TYPE_LOAD_IMAGE, NODE_TYPE_LOAD_IMAGE_MASK:
-			// we changed the filename, need to re-calculate properties?
+			format, _ := GetGraphNodeWidetValue(graph, node.ID, "1")
+			codec, _ := GetGraphNodeWidetValue(graph, node.ID, "2")
+			node.Properties["format"] = graphapi.NewSimpleStringProperty("format", format)
+			node.Properties["codec"] = graphapi.NewSimpleStringProperty("codec", codec)
 		}
 	}
 	return nil
@@ -266,8 +262,7 @@ func (comfyClient *Client) RunWorkflow(graph *graphapi.Graph) (outputs ComfyuiOu
 			// * Subfolder is the subfolder in the output directory
 			// * Type is the type of the image temp/
 			for k, v := range qm.Data {
-				log.Printf("comfyui item data: %s => %v", k, v)
-				if k == "images" || k == "gifs" {
+				if k == "images" || k == "gifs" { // video outputs are also in "images".
 					for _, output := range v {
 						imgData, err := comfyClient.GetImage(output)
 						if err != nil {
@@ -369,7 +364,7 @@ func GetGraphNodeWidetValue(graph *graphapi.Graph, nodeId int, accessor string) 
 // accessor: currently only a single array index is supported;
 // in the future it may support deep attribute like "foo.bar.baz".
 // value should either string or int.
-// Special placeholder in value: "%seed%" : a random integer.
+// Special placeholder in value: "%rand%" : a random integer.
 func SetGraphNodeWidetValue(graph *graphapi.Graph, nodeId int, accessor string, value any, seed int64) (err error) {
 	node := graph.GetNodeById(nodeId)
 	if node == nil {
@@ -394,7 +389,7 @@ func SetGraphNodeWidetValue(graph *graphapi.Graph, nodeId int, accessor string, 
 	}
 
 	if str, ok := value.(string); ok {
-		value = strings.ReplaceAll(str, "%seed%", fmt.Sprint(seed))
+		value = strings.ReplaceAll(str, "%rand%", fmt.Sprint(seed))
 	}
 
 	// if new value and existing value has different types (string / number), coalesce value to match existing type

@@ -271,10 +271,17 @@ func (c *ComfyClient) GetQueuedItem(prompt_id string) *QueueItem {
 // OnWindowSocketMessage processes each message received from the websocket connection to ComfyUI.
 // The messages are parsed, and translated into PromptMessage structs and placed into the correct QueuedItem's message channel.
 func (c *ComfyClient) OnWindowSocketMessage(msg string) {
+	//@mod: prevent future panics from killing the WebSocket listener loop completely
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("Recovered from panic in OnWindowSocketMessage", "error", r)
+		}
+	}()
+
 	message := &WSStatusMessage{}
 	err := json.Unmarshal([]byte(msg), &message)
 	if err != nil {
-		slog.Error("Deserializing Status Message", err)
+		slog.Error("Deserializing Status Message: %v", "error", err)
 	}
 
 	switch message.Type {
@@ -306,7 +313,6 @@ func (c *ComfyClient) OnWindowSocketMessage(msg string) {
 	case "executing":
 		s := message.Data.(*WSMessageDataExecuting)
 		qi := c.GetQueuedItem(s.PromptID)
-
 		if qi != nil {
 			if s.Node == nil {
 				// final node was processed

@@ -20,7 +20,7 @@ var runCmd = &cobra.Command{
 	Long: `Run a ComfyUI workflow and save output.
 
 Example:
-  goaider comfyui run flux.json -s http://127.0.0.1:8888/ -v "41:0:young girl, smiling" -v "31:0:%seed%"`,
+  goaider comfyui run flux.json -s http://127.0.0.1:8888/ -v "41:0:young girl, smiling" -v "31:0:%rand%"`,
 	RunE: doRun,
 	Args: cobra.ExactArgs(1),
 }
@@ -45,14 +45,14 @@ func init() {
 		`ComfyUI server, can be either "http://ip:port" or "ip:port".`)
 	runCmd.Flags().StringArrayVarP(&flagVars, "var", "v", nil,
 		`Set workflow node "widgets_values" variable. Format: "node_id:index:value". E.g. "42:0:girl, young child, smiling". `+
-			`Can be specified multiple times. Special values: "%seed%" : a random seed`)
+			`Can be specified multiple times. Special values: "%rand%" : a random seed`)
 	runCmd.MarkFlagRequired("server")
 	comfyui.ComfyuiCmd.AddCommand(runCmd)
 }
 
 func doRun(cmd *cobra.Command, args []string) (err error) {
 	if flagOutput != "" && flagBatch > 1 {
-		return fmt.Errorf("cannot use --output with --batch > 1. Use --output-dir instead")
+		return fmt.Errorf("cannot use --output with --batch > 1. use --output-dir instead")
 	}
 	argWorkflow := args[0]
 
@@ -60,16 +60,14 @@ func doRun(cmd *cobra.Command, args []string) (err error) {
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
 	}
+	graph, err := api.NewGraph(client, argWorkflow)
+	if err != nil {
+		return fmt.Errorf("failed to create graph: %w", err)
+	}
 
 	for i := range flagBatch {
 		seed := api.RandSeed()
-
-		graph, err := api.NewGraph(client, argWorkflow)
-		if err != nil {
-			return fmt.Errorf("failed to create graph: %w", err)
-		}
 		log.Printf("%d/%d run workflow (seed=%d)", i+1, flagBatch, seed)
-
 		if len(flagVars) > 0 {
 			if err := api.SetGraphNodeWeightValues(graph, flagVars, seed); err != nil {
 				return fmt.Errorf("failed to set graph node widget values: %w", err)

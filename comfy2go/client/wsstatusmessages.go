@@ -159,7 +159,12 @@ func (mde *WSMessageDataExecuted) UnmarshalJSON(b []byte) error {
 					outputentry := DataOutput{}
 					val, ok := outmap["filename"]
 					if ok {
-						outputentry.Filename = val.(string)
+						if str, ok := val.(string); ok { //@mod
+							outputentry.Filename = str
+						} else {
+							slog.Warn(fmt.Sprintf("WSMessageDataExecuted output entry %v unknown type", i))
+							continue
+						}
 					} else {
 						slog.Warn(fmt.Sprintf("WSMessageDataExecuted output entry %v unknown type", i))
 						continue
@@ -175,7 +180,12 @@ func (mde *WSMessageDataExecuted) UnmarshalJSON(b []byte) error {
 
 					val, ok = outmap["type"]
 					if ok {
-						outputentry.Type = val.(string)
+						if str, ok := val.(string); ok { // @mod
+							outputentry.Type = str
+						} else {
+							slog.Warn(fmt.Sprintf("WSMessageDataExecuted output entry %v unknown type", i))
+							continue
+						}
 					} else {
 						slog.Warn(fmt.Sprintf("WSMessageDataExecuted output entry %v unknown type", i))
 						continue
@@ -195,14 +205,15 @@ func (mde *WSMessageDataExecuted) UnmarshalJSON(b []byte) error {
 					slog.Warn(fmt.Sprintf("WSMessageDataExecuted output entry %v unknown type", i))
 					// create an "unknown" type
 					// convert i to a string and store it as text
-					outstring := i.(string)
-					textout := DataOutput{
-						Filename:  "",
-						Subfolder: "",
-						Type:      "unknown",
-						Text:      outstring,
+					if outstring, ok := i.(string); ok { // @mod : prevent assertion failure
+						textout := DataOutput{
+							Filename:  "",
+							Subfolder: "",
+							Type:      "unknown",
+							Text:      outstring,
+						}
+						*mde.Output[k] = append(*mde.Output[k], textout)
 					}
-					*mde.Output[k] = append(*mde.Output[k], textout)
 				}
 			}
 		}
@@ -227,6 +238,7 @@ func (mde *WSMessageDataExecuted) UnmarshalJSON(b []byte) error {
 // when there are multiple outputs, each output will receive an "executed"
 {"type": "executed", "data": {"node": "53", "output": {"images": [{"filename": "ComfyUI_temp_mynbi_00001_.png", "subfolder": "", "type": "temp"}]}, "prompt_id": "3bcf5bac-19e1-4219-a0eb-50a84e4db2ea"}}
 {"type": "executed", "data": {"node": "19", "output": {"images": [{"filename": "ComfyUI_00052_.png", "subfolder": "", "type": "output"}]}, "prompt_id": "3bcf5bac-19e1-4219-a0eb-50a84e4db2ea"}}
+{"type": "executed", "data": {"node":"42","display_node":"42","output":{"images":[{"filename":"ComfyUI_00001_.mp4","subfolder":"video","type":"output"}],"animated":[true]},"prompt_id":"3bcf5bac-19e1-4219-a0eb-50a84e4db2ea"}}
 */
 
 type WSMessageExecutionInterrupted struct {
