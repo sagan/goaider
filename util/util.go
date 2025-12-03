@@ -15,6 +15,7 @@ import (
 	"io/fs"
 	"math"
 	"math/big"
+	mathRand "math/rand"
 	"mime"
 	"os"
 	"reflect"
@@ -23,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 	"text/template"
+	"time"
 
 	"github.com/pelletier/go-toml/v2"
 	log "github.com/sirupsen/logrus"
@@ -585,4 +587,32 @@ func Sha256sumFile(filename string, hex bool) (string string, err error) {
 	} else {
 		return strings.TrimRight(base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(h.Sum(nil)), "="), nil
 	}
+}
+
+var temporaryError interface {
+	Temporary() bool
+}
+var timeoutError interface {
+	Timeout() bool
+}
+
+func IsTemporaryError(err error) bool {
+	// try to test if any err in tree is	"Timeout() bool" or "Temporary() bool"
+	if errors.As(err, &timeoutError) {
+		return timeoutError.Timeout()
+	}
+	if errors.As(err, &temporaryError) {
+		return temporaryError.Temporary()
+	}
+	return false
+}
+
+// calculateBackoff computes the exponential backoff duration for a given attempt.
+// attempt: 0 - baseBackoff; 1 - baseBackoff * 2; 2 - baseBackoff * 4;...
+func CalculateBackoff(baseBackoff, maxBackoff time.Duration, attempt int) time.Duration {
+	// Exponential backoff: base * 2^attempt
+	backoff := min(baseBackoff*(1<<attempt), maxBackoff)
+	// Add random jitter (0-1000ms) to prevent thundering herd
+	jitter := time.Duration(mathRand.Intn(1000)) * time.Millisecond
+	return backoff + jitter
 }

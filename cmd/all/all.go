@@ -15,6 +15,7 @@ import (
 	_ "github.com/sagan/goaider/cmd/paste"
 	_ "github.com/sagan/goaider/cmd/rand"
 	_ "github.com/sagan/goaider/cmd/randb"
+	_ "github.com/sagan/goaider/cmd/randu"
 	_ "github.com/sagan/goaider/cmd/sovits-genlist"
 	_ "github.com/sagan/goaider/cmd/stt"
 	_ "github.com/sagan/goaider/cmd/translate"

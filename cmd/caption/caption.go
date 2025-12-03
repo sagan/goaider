@@ -1,11 +1,9 @@
 package caption
 
 import (
-	"bytes"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"net/http"
+	"mime"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,38 +13,9 @@ import (
 
 	"github.com/sagan/goaider/cmd"
 	"github.com/sagan/goaider/constants"
+	"github.com/sagan/goaider/features/llm"
+	"github.com/sagan/goaider/util"
 )
-
-// --- Structs for Gemini API Request ---
-
-type GeminiRequest struct {
-	Contents []Content `json:"contents"`
-}
-
-type Content struct {
-	Role  string `json:"role"`
-	Parts []Part `json:"parts"`
-}
-
-type Part struct {
-	Text       string      `json:"text,omitempty"`
-	InlineData *InlineData `json:"inlineData,omitempty"`
-}
-
-type InlineData struct {
-	MimeType string `json:"mimeType"`
-	Data     string `json:"data"`
-}
-
-// --- Structs for Gemini API Response ---
-
-type GeminiResponse struct {
-	Candidates []Candidate `json:"candidates"`
-}
-
-type Candidate struct {
-	Content Content `json:"content"`
-}
 
 // --- API and Program Constants ---
 
@@ -125,9 +94,6 @@ func caption(cmd *cobra.Command, args []string) error {
 		fmt.Printf("IDENTITY set: Prepending %q to all new captions.\n", flagIdentity)
 	}
 
-	// Create an HTTP client with a timeout
-	client := &http.Client{Timeout: 45 * time.Second}
-
 	errorCnt := 0
 	// 4. Loop over all files and process images
 	for _, file := range files {
@@ -138,7 +104,7 @@ func caption(cmd *cobra.Command, args []string) error {
 		fullPath := filepath.Join(argDir, file.Name())
 
 		// processImage does all the work: API call, retries, and file saving
-		err := processImage(client, fullPath, apiKey, flagForce, flagIdentity)
+		err := processImage(fullPath, apiKey, flagForce, flagIdentity)
 		if err != nil {
 			fmt.Printf("Processing %s: ❌ FAILED (%v)\n", file.Name(), err)
 			errorCnt++
@@ -161,7 +127,7 @@ func caption(cmd *cobra.Command, args []string) error {
  * 6. Prepends identity (if provided)
  * 7. Saves the caption to a .txt file
  */
-func processImage(client *http.Client, imagePath string, apiKey string, force bool, identity string) error {
+func processImage(imagePath string, apiKey string, force bool, identity string) (err error) {
 	// 1. Check for existing .txt file before doing any work
 	baseName := filepath.Base(imagePath)
 	ext := filepath.Ext(baseName)
@@ -184,17 +150,17 @@ func processImage(client *http.Client, imagePath string, apiKey string, force bo
 		return fmt.Errorf("failed to read image: %w", err)
 	}
 	base64Image := base64.StdEncoding.EncodeToString(imageData)
-	mimeType := getMimeType(imagePath)
+	mimeType := mime.TypeByExtension(strings.ToLower(filepath.Ext(imagePath)))
 
 	// 3. Construct the API request payload
-	payload := GeminiRequest{
-		Contents: []Content{
+	payload := &llm.GeminiRequest{
+		Contents: []llm.Content{
 			{
 				Role: "user",
-				Parts: []Part{
+				Parts: []llm.Part{
 					{Text: captionPrompt}, // The prompt to the model
 					{
-						InlineData: &InlineData{ // The image data
+						InlineData: &llm.InlineData{ // The image data
 							MimeType: mimeType,
 							Data:     base64Image,
 						},
@@ -204,89 +170,25 @@ func processImage(client *http.Client, imagePath string, apiKey string, force bo
 		},
 	}
 
-	jsonPayload, err := json.Marshal(payload)
+	var geminiRes *llm.GeminiResponse
+	for retries := range maxRetries {
+		geminiRes, err = llm.Gemini(apiKey, flagModel, payload)
+		if err == nil {
+			break
+		}
+		if util.IsTemporaryError(err) {
+			wait := util.CalculateBackoff(llm.GeminiApiBaseBackoff, llm.GeminiApiMaxBackoff, retries)
+			fmt.Printf("  .. error (%v), retrying in %v\n", err, wait)
+			time.Sleep(wait)
+			continue
+		} else {
+			break
+		}
+	}
 	if err != nil {
-		return fmt.Errorf("failed to marshal JSON payload: %w", err)
+		return err
 	}
-
-	apiUrl := fmt.Sprintf("%s%s:generateContent?key=%s", constants.GEMINI_API_URL, flagModel, apiKey)
-	var geminiResp GeminiResponse
-	var resp *http.Response
-	var reqErr error
-	delay := 2 * time.Second // Initial retry delay
-
-	// 4. API Call with simple exponential backoff
-	for range maxRetries {
-		req, err := http.NewRequest("POST", apiUrl, bytes.NewBuffer(jsonPayload))
-		if err != nil {
-			return fmt.Errorf("failed to create request: %w", err)
-		}
-		req.Header.Set("Content-Type", "application/json")
-
-		resp, reqErr = client.Do(req)
-
-		// If there's a network error, retry
-		if reqErr != nil {
-			fmt.Printf("  ...network error (%v), retrying in %v\n", reqErr, delay)
-			time.Sleep(delay)
-			delay *= 2 // Double the delay for next retry
-			continue
-		}
-
-		// Check for 429 (Throttling) or 5xx (Server Error) and retry
-		if resp.StatusCode == 429 || resp.StatusCode >= 500 {
-			fmt.Printf("  ...API error (%s), retrying in %v\n", resp.Status, delay)
-			if resp.Body != nil {
-				resp.Body.Close() // Must close body before retrying
-			}
-			time.Sleep(delay)
-			delay *= 2
-			continue
-		}
-
-		// Any other non-200 status code is a non-retryable error
-		if resp.StatusCode != http.StatusOK {
-			break // Exit the loop to handle the error below
-		}
-
-		// Try to decode the response. If it's empty, we might want to retry.
-		if err := json.NewDecoder(resp.Body).Decode(&geminiResp); err != nil {
-			if resp.Body != nil {
-				resp.Body.Close()
-			}
-			return fmt.Errorf("failed to decode API response: %w", err)
-		}
-		resp.Body.Close() // Close body after successful decode
-
-		// If the response is empty, retry
-		if len(geminiResp.Candidates) == 0 || len(geminiResp.Candidates[0].Content.Parts) == 0 || geminiResp.Candidates[0].Content.Parts[0].Text == "" {
-			fmt.Printf("  ...API returned empty caption, retrying in %v\n", delay)
-			time.Sleep(delay)
-			delay *= 2
-			continue
-		}
-
-		// If we got a valid response, break the loop
-		break
-	}
-
-	// If all retries failed on a network error
-	if reqErr != nil {
-		return fmt.Errorf("all retries failed: %w", reqErr)
-	}
-
-	// Handle non-OK, non-retryable status codes after the loop
-	if resp != nil && resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("API request failed with status %s", resp.Status)
-	}
-
-	// 5. Extract the caption text (already decoded in the loop)
-	if len(geminiResp.Candidates) == 0 || len(geminiResp.Candidates[0].Content.Parts) == 0 || geminiResp.Candidates[0].Content.Parts[0].Text == "" {
-		return fmt.Errorf("no caption generated (empty response from API)")
-	}
-	caption := geminiResp.Candidates[0].Content.Parts[0].Text
-
-	// 6. Prepend identity if provided
+	caption := geminiRes.Candidates[0].Content.Parts[0].Text
 	finalCaption := strings.TrimSpace(caption) // Clean up any extra whitespace
 	if identity != "" {
 		finalCaption = identity + ", " + finalCaption
@@ -306,25 +208,9 @@ func processImage(client *http.Client, imagePath string, apiKey string, force bo
 func isImageFile(filename string) bool {
 	ext := strings.ToLower(filepath.Ext(filename))
 	switch ext {
-	case ".jpg", ".jpeg", ".png", ".webp":
+	case ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp":
 		return true
 	default:
 		return false
-	}
-}
-
-// getMimeType determines the MIME type from the file extension
-func getMimeType(imagePath string) string {
-	ext := strings.ToLower(filepath.Ext(imagePath))
-	switch ext {
-	case ".jpg", ".jpeg":
-		return "image/jpeg"
-	case ".png":
-		return "image/png"
-	case ".webp":
-		return "image/webp"
-	default:
-		// A safe default
-		return "application/octet-stream"
 	}
 }

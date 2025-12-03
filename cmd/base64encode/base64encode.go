@@ -79,7 +79,7 @@ func doBase64encode(cmd *cobra.Command, args []string) (err error) {
 					mimeType = "application/octet-stream"
 				}
 			} else if flagInput != "" {
-				mimeType = mime.TypeByExtension(filepath.Ext(flagInput))
+				mimeType = mime.TypeByExtension(strings.ToLower(filepath.Ext(flagInput)))
 			}
 			if mimeType == "" {
 				mimeType = "application/octet-stream"

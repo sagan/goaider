@@ -1,13 +1,9 @@
 package cmd
 
 import (
-	"bytes"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"io"
-	"math/rand"
-	"net/http"
+	"mime"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,14 +14,8 @@ import (
 
 	"github.com/sagan/goaider/cmd"
 	"github.com/sagan/goaider/constants"
-)
-
-// --- Constants for API and Retry Logic ---
-const (
-	// Set base backoff to 6s to respect the default 10 RPM quota
-	baseBackoff = 6 * time.Second
-	maxBackoff  = 60 * time.Second
-	maxRetries  = 4 // 4 retries = 5 total attempts
+	"github.com/sagan/goaider/features/llm"
+	"github.com/sagan/goaider/util"
 )
 
 var (
@@ -72,9 +62,6 @@ func stt(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("error reading directory %q: %w", argDir, err)
 	}
 
-	// 60-second timeout for a single request, but retries can make this longer.
-	httpClient := &http.Client{Timeout: 60 * time.Second}
-
 	errorCnt := 0
 	for _, file := range files {
 		if file.IsDir() {
@@ -83,11 +70,11 @@ func stt(cmd *cobra.Command, args []string) error {
 
 		fileName := file.Name()
 		fileExt := strings.ToLower(filepath.Ext(fileName))
-		mimeType := getMimeType(fileExt)
+		mimeType := mime.TypeByExtension(fileExt)
 
-		if mimeType == "" {
-			// fmt.Printf("Skipping non-audio file: %s\n", fileName)
-			continue // Not a supported audio file
+		if !strings.HasPrefix(mimeType, "audio/") {
+			// log.Printf("Skipping non-audio file: %s", fileName)
+			continue
 		}
 
 		// Define input and output paths
@@ -114,7 +101,7 @@ func stt(cmd *cobra.Command, args []string) error {
 		}
 
 		// 2. Call Gemini API
-		transcript, err := getTranscript(httpClient, apiKey, flagModel, audioData, mimeType)
+		transcript, err := getTranscript(apiKey, flagModel, audioData, mimeType)
 		if err != nil {
 			log.Printf("Error generating transcript for %s: %v", fileName, err)
 			errorCnt++
@@ -139,60 +126,18 @@ func stt(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// Structs for Gemini API Request
-type GeminiRequest struct {
-	Contents []Content `json:"contents"`
-}
-
-type Content struct {
-	Parts []Part `json:"parts"`
-}
-
-type Part struct {
-	Text       string      `json:"text,omitempty"`
-	InlineData *InlineData `json:"inlineData,omitempty"`
-}
-
-type InlineData struct {
-	MimeType string `json:"mimeType"`
-	Data     string `json:"data"` // Base64 encoded string
-}
-
-// Structs for Gemini API Response
-type GeminiResponse struct {
-	Candidates     []Candidate     `json:"candidates"`
-	PromptFeedback *PromptFeedback `json:"promptFeedback,omitempty"`
-}
-
-type Candidate struct {
-	Content       Content        `json:"content"`
-	FinishReason  string         `json:"finishReason"`
-	Index         int            `json:"index"`
-	SafetyRatings []SafetyRating `json:"safetyRatings"`
-}
-
-type SafetyRating struct {
-	Category    string `json:"category"`
-	Probability string `json:"probability"`
-}
-
-type PromptFeedback struct {
-	BlockReason   string         `json:"blockReason,omitempty"`
-	SafetyRatings []SafetyRating `json:"safetyRatings,omitempty"`
-}
-
 // getTranscript calls the Gemini API with retry logic
-func getTranscript(client *http.Client, apiKey, modelName string, audioData []byte, mimeType string) (string, error) {
+func getTranscript(apiKey, modelName string, audioData []byte, mimeType string) (string, error) {
 	// 1. Base64 encode the audio
 	encodedData := base64.StdEncoding.EncodeToString(audioData)
 
 	// 2. Prepare the request body
-	reqBody := GeminiRequest{
-		Contents: []Content{
+	reqBody := &llm.GeminiRequest{
+		Contents: []llm.Content{
 			{
-				Parts: []Part{
+				Parts: []llm.Part{
 					{Text: "Generate a transcript of this audio. Only output the transcribed text."},
-					{InlineData: &InlineData{
+					{InlineData: &llm.InlineData{
 						MimeType: mimeType,
 						Data:     encodedData,
 					}},
@@ -200,112 +145,23 @@ func getTranscript(client *http.Client, apiKey, modelName string, audioData []by
 			},
 		},
 	}
-
-	jsonData, err := json.Marshal(reqBody)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal JSON request: %w", err)
-	}
-
-	// 3. Build the URL
-	url := fmt.Sprintf("%s%s:generateContent?key=%s", constants.GEMINI_API_URL, modelName, apiKey)
-
 	var lastErr error
-
-	// 4. Start retry loop
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		// Create a new request *inside* the loop because the body buffer must be fresh
-		req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
-		if err != nil {
-			return "", fmt.Errorf("failed to create HTTP request: %w", err) // Non-retryable
+	for attempt := range 5 {
+		geminiRes, err := llm.Gemini(apiKey, modelName, reqBody)
+		if err == nil {
+			transcript := geminiRes.Candidates[0].Content.Parts[0].Text
+			return transcript, nil
 		}
-		req.Header.Set("Content-Type", "application/json")
-
-		resp, err := client.Do(req)
-		if err != nil {
-			// Network error
+		wait := util.CalculateBackoff(llm.GeminiApiBaseBackoff, llm.GeminiApiMaxBackoff, attempt)
+		if util.IsTemporaryError(err) {
 			lastErr = fmt.Errorf("request failed: %w", err)
-			log.Printf("Attempt %d/%d: Network error (%v). Retrying...", attempt+1, maxRetries+1, err)
-			time.Sleep(calculateBackoff(attempt))
+			log.Printf("Attempt %d: error (%v). Retrying in %v...", attempt, err, wait)
+			time.Sleep(wait)
 			continue
+		} else {
+			return "", err
 		}
-
-		// Check status code
-		switch resp.StatusCode {
-		case http.StatusOK:
-			// Success!
-			respBody, err := io.ReadAll(resp.Body)
-			resp.Body.Close()
-			if err != nil {
-				return "", fmt.Errorf("failed to read successful API response body: %w", err)
-			}
-
-			// Parse the response
-			var apiResp GeminiResponse
-			if err := json.Unmarshal(respBody, &apiResp); err != nil {
-				return "", fmt.Errorf("failed to unmarshal API response: %w", err)
-			}
-
-			// Check for blocked content
-			if apiResp.PromptFeedback != nil && apiResp.PromptFeedback.BlockReason != "" {
-				return "", fmt.Errorf("request was blocked: %s", apiResp.PromptFeedback.BlockReason)
-			}
-
-			// Extract the text
-			if len(apiResp.Candidates) == 0 || len(apiResp.Candidates[0].Content.Parts) == 0 {
-				return "", fmt.Errorf("no transcript content found in API response: %s", string(respBody))
-			}
-			transcript := apiResp.Candidates[0].Content.Parts[0].Text
-			return transcript, nil // SUCCESS EXIT
-
-		case http.StatusTooManyRequests, http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
-			// Retryable server-side error (429 or 5xx)
-			respBody, _ := io.ReadAll(resp.Body) // Read body for logging, ignore error
-			resp.Body.Close()
-			lastErr = fmt.Errorf("API returned retryable status %d: %s", resp.StatusCode, string(respBody))
-			log.Printf("Attempt %d/%d: %v. Retrying in %v...", attempt+1, maxRetries+1, lastErr, calculateBackoff(attempt))
-			time.Sleep(calculateBackoff(attempt))
-			continue
-
-		default:
-			// Non-retryable client-side error (e.g., 400, 401, 404)
-			respBody, _ := io.ReadAll(resp.Body)
-			resp.Body.Close()
-			return "", fmt.Errorf("API request failed with non-retryable status %d: %s", resp.StatusCode, string(respBody))
-		}
-	} // end for loop
-
+	}
 	// If loop finishes, all retries failed
-	return "", fmt.Errorf("all %d retry attempts failed. Last error: %w", maxRetries+1, lastErr)
-}
-
-// calculateBackoff computes the exponential backoff duration for a given attempt
-func calculateBackoff(attempt int) time.Duration {
-	// Exponential backoff: base * 2^attempt
-	backoff := baseBackoff * (1 << attempt)
-	if backoff > maxBackoff {
-		backoff = maxBackoff
-	}
-	// Add random jitter (0-1000ms) to prevent thundering herd
-	jitter := time.Duration(rand.Intn(1000)) * time.Millisecond
-	return backoff + jitter
-}
-
-// --- Helpers ---
-
-// getMimeType maps file extensions to their MIME types for the API
-func getMimeType(ext string) string {
-	switch ext {
-	case ".wav":
-		return "audio/wav"
-	case ".mp3":
-		return "audio/mpeg"
-	case ".m4a":
-		return "audio/m4a"
-	case ".flac":
-		return "audio/flac"
-	case ".ogg":
-		return "audio/ogg"
-	default:
-		return "" // Not a supported type
-	}
+	return "", fmt.Errorf("all attempts failed. Last error: %w", lastErr)
 }

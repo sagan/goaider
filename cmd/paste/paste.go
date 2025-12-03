@@ -87,7 +87,7 @@ func doPaste(cmd *cobra.Command, args []string) (err error) {
 		if argFilename == "" {
 			fullpath += ".txt"
 		} else if argFilename != "-" {
-			if ext := filepath.Ext(fullpath); strings.HasPrefix(mime.TypeByExtension(ext), "image/") {
+			if strings.HasPrefix(mime.TypeByExtension(strings.ToLower(filepath.Ext(fullpath))), "image/") {
 				return fmt.Errorf("clipboard is text but provided filename is image ext")
 			}
 		}

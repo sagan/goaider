@@ -15,7 +15,7 @@
 - `goaider parsetfef` : 解析 TensorFlow event 文件 (`events.out.tfevents.*`)，生成 csv 或人类可读的文件。用于分析模型训练效果。
 - `goaider paste` : 将剪贴板里内容保存为文件。仅支持 Windows。
 - `goaider base64encode` / `goaider base64decode` : base64 编码 / 解码。
-- `goaider rand` / `goaider randb` : 生成一个密码学安全的随机字符串 / 随机二进制 bytes。
+- `goaider rand` / `goaider randb` / `goaider randu`: 生成一个密码学安全的随机字符串 / 随机二进制 bytes / 随机 uuid。
 - `goaider stt` (speech to text) : 使用 Gemini 生成目录里所有音频文件的文本转写(transcript)。适用于 TTS 模型训练准备数据集。
 - `goaider translate` : 使用 Google Cloud Translation API 翻译文本。支持 interactive shell 模式(输入原文；输出译文)；支持自动将译文复制到剪贴板(仅限 Windows)。设计用途是将中文 prompt 翻译为英文然后调用图片生成模型。。
 - `goaider comfyui` : ComfyUI 相关的功能。例如直接运行 json / png 格式的 workflow 并保存输出文件。
