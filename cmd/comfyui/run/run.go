@@ -7,9 +7,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	_ "github.com/richinsley/comfy2go/client"
-	_ "github.com/richinsley/comfy2go/graphapi"
-
 	"github.com/sagan/goaider/cmd/comfyui"
 	"github.com/sagan/goaider/cmd/comfyui/api"
 )

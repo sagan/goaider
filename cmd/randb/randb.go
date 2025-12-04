@@ -17,8 +17,8 @@ import (
 var randCmd = &cobra.Command{
 	Use:     "randb",
 	Aliases: []string{"randombytes"},
-	Short:   "Get a cryptographically secure randam bytes of length 16. Output base64 by default",
-	Long: `Get a cryptographically secure randam bytes of length 16. Output base64 by default.
+	Short:   "Get a cryptographically secure random bytes of length 16. Output base64 by default",
+	Long: `Get a cryptographically secure random bytes of length 16. Output base64 by default.
 
 It outputs to stdout.`,
 	RunE: doRandb,

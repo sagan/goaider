@@ -1,0 +1,78 @@
+package genlist
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/natefinch/atomic"
+	log "github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
+
+	"github.com/sagan/goaider/cmd/comfyui"
+	"github.com/sagan/goaider/cmd/comfyui/api"
+	"github.com/sagan/goaider/constants"
+	"github.com/sagan/goaider/features/llm"
+	"github.com/sagan/goaider/util"
+	"github.com/sagan/goaider/util/stringutil"
+)
+
+const ACTIONS_FILE = "actions.txt"
+const CONTEXTS_FILE = "contexts.txt"
+
+var genCmd = &cobra.Command{
+	Use:   "genlist",
+	Short: "Generate prompts list(s)",
+	Long:  `Generate prompts list(s).`,
+	RunE:  doGen,
+	Args:  cobra.ExactArgs(0),
+}
+
+var (
+	flagForce  bool
+	flagModel  string
+	flatOutput string // output dir
+)
+
+func init() {
+	genCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Force overwriting without confirmation")
+	genCmd.Flags().StringVarP(&flatOutput, "output", "o", ".", `Output dir`)
+	genCmd.Flags().StringVarP(&flagModel, "model", "", constants.DEFAULT_GEMINI_MODEL, "The model to use")
+	comfyui.ComfyuiCmd.AddCommand(genCmd)
+}
+
+func doGen(cmd *cobra.Command, args []string) (err error) {
+	actionsFile := filepath.Join(flatOutput, ACTIONS_FILE)
+	contextsFile := filepath.Join(flatOutput, CONTEXTS_FILE)
+	if exists, err := util.FileExists(actionsFile); err != nil || (exists && !flagForce) {
+		return fmt.Errorf("actions file %q exists or can't access, err=%w", actionsFile, err)
+	}
+	if exists, err := util.FileExists(contextsFile); err != nil || (exists && !flagForce) {
+		return fmt.Errorf("contexts file %q exists or can't access, err=%w", contextsFile, err)
+	}
+
+	apiKey := os.Getenv(constants.ENV_GEMINI_API_KEY)
+	if apiKey == "" {
+		return fmt.Errorf("GEMINI_API_KEY environment variable not set")
+	}
+	lists, err := llm.GeminiJsonResponse[api.CreativeLists](apiKey, flagModel, api.PromptActionList("a person"))
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("lists: %s\n", util.ToJson(lists))
+
+	actionsFileContents := strings.Join(util.Map(lists.Actions, stringutil.ReplaceNewLinesWithSpace), "\n")
+	contextsFileContents := strings.Join(util.Map(lists.Contexts, stringutil.ReplaceNewLinesWithSpace), "\n")
+
+	err1 := atomic.WriteFile(actionsFile, strings.NewReader(actionsFileContents))
+	log.Printf("Save actions file to %q (err=%v)", actionsFile, err1)
+	err2 := atomic.WriteFile(contextsFile, strings.NewReader(contextsFileContents))
+	log.Printf("Save contexts file to %q (err=%v)", contextsFile, err1)
+	if err1 != nil || err2 != nil {
+		return fmt.Errorf("files write error: %w, %w", err1, err2)
+	}
+
+	return nil
+}

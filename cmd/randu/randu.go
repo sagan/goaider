@@ -14,8 +14,8 @@ import (
 var randCmd = &cobra.Command{
 	Use:     "randu",
 	Aliases: []string{"randuuid"},
-	Short:   "Get a cryptographically secure randam uuid",
-	Long: `Get a cryptographically secure randam uuid.
+	Short:   "Get a cryptographically secure random uuid",
+	Long: `Get a cryptographically secure random uuid.
 	
 E.g. 69e4c430-8daa-bd5e-c8e4-e9a2c3d0050c`,
 	RunE: doRandu,
