@@ -17,7 +17,7 @@ var runCmd = &cobra.Command{
 	Long: `Run a ComfyUI workflow and save output.
 
 Example:
-  goaider comfyui run flux.json -s http://127.0.0.1:8888/ -v "41:0:young girl, smiling" -v "31:0:%rand%"`,
+  goaider comfyui run flux.json -s 127.0.0.1:8188 -v "41:0:young girl, smiling" -v "31:0:%rand%"`,
 	RunE: doRun,
 	Args: cobra.ExactArgs(1),
 }
@@ -41,7 +41,7 @@ func init() {
 	runCmd.Flags().StringVarP(&flagServer, "server", "s", "127.0.0.1:8188",
 		`ComfyUI server, can be either "http://ip:port" or "ip:port".`)
 	runCmd.Flags().StringArrayVarP(&flagVars, "var", "v", nil,
-		`Set workflow node "widgets_values" variable. Format: "node_id:index:value". E.g. "42:0:girl, young child, smiling". `+
+		`Set workflow node "widgets_values" variable. Format: "node_id:index:value". E.g. "42:0:girl, smiling". `+
 			`Can be specified multiple times. Special values: "%rand%" : a random seed`)
 	runCmd.MarkFlagRequired("server")
 	comfyui.ComfyuiCmd.AddCommand(runCmd)

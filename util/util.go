@@ -616,3 +616,18 @@ func CalculateBackoff(baseBackoff, maxBackoff time.Duration, attempt int) time.D
 	jitter := time.Duration(mathRand.Intn(1000)) * time.Millisecond
 	return backoff + jitter
 }
+
+// Return t unconditionally.
+func First[T any](t T, args ...any) T {
+	return t
+}
+
+func FirstNonZeroArg[T comparable](args ...T) T {
+	var empty T
+	for _, t := range args {
+		if t != empty {
+			return t
+		}
+	}
+	return empty
+}

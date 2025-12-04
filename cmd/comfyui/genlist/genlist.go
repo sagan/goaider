@@ -2,6 +2,7 @@ package genlist
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,12 +14,13 @@ import (
 	"github.com/sagan/goaider/cmd/comfyui"
 	"github.com/sagan/goaider/cmd/comfyui/api"
 	"github.com/sagan/goaider/constants"
+	"github.com/sagan/goaider/features/csvfeature"
 	"github.com/sagan/goaider/features/llm"
 	"github.com/sagan/goaider/util"
 	"github.com/sagan/goaider/util/stringutil"
 )
 
-const ACTIONS_FILE = "actions.txt"
+const ACTIONS_FILE = "actions.csv"
 const CONTEXTS_FILE = "contexts.txt"
 
 var genCmd = &cobra.Command{
@@ -63,13 +65,18 @@ func doGen(cmd *cobra.Command, args []string) (err error) {
 
 	fmt.Printf("lists: %s\n", util.ToJson(lists))
 
-	actionsFileContents := strings.Join(util.Map(lists.Actions, stringutil.ReplaceNewLinesWithSpace), "\n")
-	contextsFileContents := strings.Join(util.Map(lists.Contexts, stringutil.ReplaceNewLinesWithSpace), "\n")
-
-	err1 := atomic.WriteFile(actionsFile, strings.NewReader(actionsFileContents))
+	reader, writer := io.Pipe()
+	go func() {
+		err := csvfeature.WriteListsToCsv(writer, []string{"action", "action_zh"}, lists.Actions, lists.ActionsZh)
+		writer.CloseWithError(err)
+	}()
+	err1 := atomic.WriteFile(actionsFile, reader)
 	log.Printf("Save actions file to %q (err=%v)", actionsFile, err1)
+
+	contextsFileContents := strings.Join(util.Map(lists.Contexts, stringutil.ReplaceNewLinesWithSpace), "\n")
 	err2 := atomic.WriteFile(contextsFile, strings.NewReader(contextsFileContents))
 	log.Printf("Save contexts file to %q (err=%v)", contextsFile, err1)
+
 	if err1 != nil || err2 != nil {
 		return fmt.Errorf("files write error: %w, %w", err1, err2)
 	}

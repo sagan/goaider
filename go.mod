@@ -30,6 +30,7 @@ require (
 	github.com/xxr3376/gtboard v0.0.2
 	golang.design/x/clipboard v0.7.1
 	golang.org/x/exp v0.0.0-20251125195548-87e1e737ad39
+	golang.org/x/sync v0.18.0
 	golang.org/x/term v0.37.0
 	golang.org/x/text v0.30.0
 	golift.io/xtractr v0.2.2

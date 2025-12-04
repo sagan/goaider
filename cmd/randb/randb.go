@@ -52,7 +52,7 @@ func doRandb(cmd *cobra.Command, args []string) (err error) {
 		s = fmt.Sprintf("%x", b)
 	} else if flagUrl {
 		s = fmt.Sprint(base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(b))
-	} else {
+	} else if !flagRaw {
 		s = fmt.Sprint(base64.StdEncoding.EncodeToString(b))
 	}
 
