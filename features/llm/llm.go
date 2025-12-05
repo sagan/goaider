@@ -2,6 +2,7 @@ package llm
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -177,4 +178,89 @@ func GeminiChat(apiKey string, model string, promptText string) (string, error) 
 		return "", err
 	}
 	return strings.TrimSpace(apiResp.Candidates[0].Content.Parts[0].Text), nil
+}
+
+// GeminiImageToText sends an image and a text prompt to Gemini and returns the text response.
+// supported mimeTypes: "image/png", "image/jpeg", "image/webp", "image/heic", "image/heif"
+func GeminiImageToText(apiKey string, model string, promptText string,
+	imageBytes []byte, mimeType string) (string, error) {
+	// 1. Encode image to Base64
+	b64Data := base64.StdEncoding.EncodeToString(imageBytes)
+
+	// 2. Construct Request
+	reqBody := &GeminiRequest{
+		Contents: []Content{
+			{
+				Role: "user",
+				Parts: []Part{
+					{Text: promptText},
+					{
+						InlineData: &InlineData{
+							MimeType: mimeType,
+							Data:     b64Data,
+						},
+					},
+				},
+			},
+		},
+		GenerationConfig: &GenerationConfig{
+			Temperature: 0.4, // Lower temperature for more descriptive/accurate results
+		},
+	}
+
+	// 3. Call API
+	apiResp, err := Gemini(apiKey, model, reqBody)
+	if err != nil {
+		return "", err
+	}
+
+	return strings.TrimSpace(apiResp.Candidates[0].Content.Parts[0].Text), nil
+}
+
+// GeminiImageToJson sends an image and a text prompt to Gemini and enforces a JSON response
+// that conforms to the schema of type T.
+func GeminiImageToJson[T any](apiKey string, model string, promptText string, imageBytes []byte, mimeType string) (*T, error) {
+	// 1. Generate Schema
+	schema := jsonschema.Reflect(new(T))
+
+	// 2. Encode Image
+	b64Data := base64.StdEncoding.EncodeToString(imageBytes)
+
+	// 3. Construct Request with Image AND Schema
+	reqBody := &GeminiRequest{
+		Contents: []Content{
+			{
+				Role: "user",
+				Parts: []Part{
+					{Text: promptText},
+					{
+						InlineData: &InlineData{
+							MimeType: mimeType,
+							Data:     b64Data,
+						},
+					},
+				},
+			},
+		},
+		GenerationConfig: &GenerationConfig{
+			ResponseMimeType:   "application/json",
+			ResponseJsonSchema: schema,
+			Temperature:        0.4,
+		},
+	}
+
+	// 4. Call API
+	apiResp, err := Gemini(apiKey, model, reqBody)
+	if err != nil {
+		return nil, err
+	}
+
+	// 5. Parse JSON
+	rawJsonString := apiResp.Candidates[0].Content.Parts[0].Text
+	result := new(T)
+	if err := json.Unmarshal([]byte(rawJsonString), &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal internal JSON: %w", err)
+	}
+
+	return result, nil
 }

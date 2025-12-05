@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"regexp"
 
+	"github.com/natefinch/atomic"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
@@ -89,7 +90,7 @@ func norfilenames(cmd *cobra.Command, args []string) error {
 	log.Printf("Performing renamings...")
 	errorCnt := 0
 	for _, rp := range pendingRenames {
-		if err := os.Rename(rp.oldPath, rp.newPath); err != nil {
+		if err := atomic.ReplaceFile(rp.oldPath, rp.newPath); err != nil {
 			log.Printf("Error renaming %q: %v", rp.oldName, err)
 			errorCnt++
 		} else {

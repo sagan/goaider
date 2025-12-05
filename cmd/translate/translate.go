@@ -22,6 +22,7 @@ import (
 	"github.com/sagan/goaider/features/translation"
 	"github.com/sagan/goaider/util"
 	"github.com/sagan/goaider/util/helper"
+	"github.com/sagan/goaider/util/stringutil"
 )
 
 var translateCmd = &cobra.Command{
@@ -48,6 +49,7 @@ that translate each input line and output the result.`,
 
 var (
 	flagForce          bool
+	flagLines          bool   // Used with --input file. Treat each line of the file as standalone input
 	flagOutputPrefix   string // prefix string when generating output text
 	flagOutputTemplate string // template string for generating output text
 	flagAutoCopy       bool   // auto copy translated text to clipboard
@@ -58,6 +60,8 @@ var (
 )
 
 func init() {
+	translateCmd.Flags().BoolVarP(&flagLines, "lines", "L", false,
+		`Translate each line of source text as a separate input. Output will also be line by line`)
 	translateCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Force overwriting without confirmation")
 	translateCmd.Flags().BoolVarP(&flagAutoCopy, "auto-copy", "C", false, `Auto copy translated text to clipboard. `+
 		`It works on Windows only`)
@@ -100,9 +104,9 @@ func doTranslate(cmd *cobra.Command, args []string) (err error) {
 		argInput = args[0]
 	}
 
-	var copyTemplate *template.Template
+	var outputTemplate *template.Template
 	if flagOutputTemplate != "" {
-		copyTemplate, err = helper.GetTemplate(flagOutputTemplate, true)
+		outputTemplate, err = helper.GetTemplate(flagOutputTemplate, true)
 		if err != nil {
 			return fmt.Errorf("invalid copy template: %w", err)
 		}
@@ -139,7 +143,7 @@ func doTranslate(cmd *cobra.Command, args []string) (err error) {
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "failed to translate: %v", err)
 			}
-			response, err := render(copyTemplate, flagOutputPrefix, translatedText, input, flagTargetLang, detectedSource)
+			response, err := render(outputTemplate, flagOutputPrefix, translatedText, input, flagTargetLang, detectedSource)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "error generating response: %v", err)
 				return
@@ -177,6 +181,40 @@ func doTranslate(cmd *cobra.Command, args []string) (err error) {
 	} else {
 		inputText = argInput
 	}
+
+	if flagLines {
+		lines := stringutil.SplitLines(inputText)
+		translatedLines, detectedSources, err := translation.TransBatch(ctx, client, lines, targetLang, sourceLang)
+		if err != nil {
+			return err
+		}
+		var finalOutput strings.Builder
+		for i, line := range translatedLines {
+			originalLine := lines[i]
+			detectedSource := detectedSources[i]
+			response, err := render(outputTemplate, flagOutputPrefix, line, originalLine, flagTargetLang, detectedSource)
+			if err != nil {
+				return fmt.Errorf("error generating response for line %d: %w", i+1, err)
+			}
+			finalOutput.WriteString(response)
+			finalOutput.WriteString("\n")
+		}
+
+		if flagAutoCopy {
+			clipboard.CopyString(finalOutput.String())
+		}
+
+		if flagOutput == "-" {
+			_, err = fmt.Print(finalOutput.String())
+		} else {
+			err = atomic.WriteFile(flagOutput, strings.NewReader(finalOutput.String()))
+		}
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
 	inputText = strings.TrimSpace(inputText)
 	if len(inputText) == 0 {
 		log.Warnf("input is empty")
@@ -187,7 +225,7 @@ func doTranslate(cmd *cobra.Command, args []string) (err error) {
 	if err != nil {
 		return fmt.Errorf("failed to translate: %w", err)
 	}
-	response, err := render(copyTemplate, flagOutputPrefix, translatedText, inputText, flagTargetLang, detectedSource)
+	response, err := render(outputTemplate, flagOutputPrefix, translatedText, inputText, flagTargetLang, detectedSource)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error generating response: %v", err)
 		return

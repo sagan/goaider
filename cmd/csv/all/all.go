@@ -7,5 +7,6 @@ import (
 	_ "github.com/sagan/goaider/cmd/csv/query"
 	_ "github.com/sagan/goaider/cmd/csv/render"
 	_ "github.com/sagan/goaider/cmd/csv/sort"
+	_ "github.com/sagan/goaider/cmd/csv/txt2csv"
 	_ "github.com/sagan/goaider/cmd/csv/uniq"
 )

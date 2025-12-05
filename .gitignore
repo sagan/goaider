@@ -7,9 +7,4 @@
 /.data
 
 # experiment files in root dir
-/*.csv
-/*.json
-/*.txt
-/*.md
-/*.png
-/*.mp4
+/*.*

@@ -3,7 +3,6 @@ package paste
 import (
 	"bytes"
 	"fmt"
-	"mime"
 	"os"
 	"path/filepath"
 	"strings"
@@ -87,7 +86,7 @@ func doPaste(cmd *cobra.Command, args []string) (err error) {
 		if argFilename == "" {
 			fullpath += ".txt"
 		} else if argFilename != "-" {
-			if strings.HasPrefix(mime.TypeByExtension(strings.ToLower(filepath.Ext(fullpath))), "image/") {
+			if strings.HasPrefix(util.GetMimeType(fullpath), "image/") {
 				return fmt.Errorf("clipboard is text but provided filename is image ext")
 			}
 		}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -13,7 +14,44 @@ import (
 // WriteListsToCsv combines multiple lists of columns and outputs them as CSV.
 // It zips the lists horizontally.
 // lists[0] is the data for the first set of columns, lists[1] for the next, etc.
+// If columnNames is not nil, write the header line in csv;
+// also, the output csv columns are sorted alphabetically in this case.
 func WriteListsToCsv(output io.Writer, columnNames []string, lists ...[]string) error {
+	// sort columnNames & lists by columnNames alphabetical order
+	if columnNames != nil {
+		// Create a slice of structs to hold column name and its original index
+		type colInfo struct {
+			Name      string
+			OrigIndex int
+		}
+		cols := make([]colInfo, len(columnNames))
+		for i, name := range columnNames {
+			cols[i] = colInfo{Name: name, OrigIndex: i}
+		}
+
+		// Sort based on column name
+		sort.SliceStable(cols, func(i, j int) bool {
+			return cols[i].Name < cols[j].Name
+		})
+
+		// Reorder columnNames and lists based on sorted order
+		newColumnNames := make([]string, len(columnNames))
+		newLists := make([][]string, len(lists))
+
+		for i, col := range cols {
+			newColumnNames[i] = col.Name
+			if col.OrigIndex < len(lists) { // Ensure index is within bounds of original lists
+				newLists[i] = lists[col.OrigIndex]
+			} else {
+				// This case should ideally not happen if columnNames and lists are aligned,
+				// but as a safeguard, initialize with an empty slice.
+				newLists[i] = []string{}
+			}
+		}
+		columnNames = newColumnNames
+		lists = newLists
+	}
+
 	writer := csv.NewWriter(output)
 
 	// 1. Write the Header (if provided)

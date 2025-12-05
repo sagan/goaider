@@ -18,6 +18,7 @@ import (
 	mathRand "math/rand"
 	"mime"
 	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"sort"
@@ -630,4 +631,9 @@ func FirstNonZeroArg[T comparable](args ...T) T {
 		}
 	}
 	return empty
+}
+
+// Get mime type (e.g. text/plain) from file path / name / ext
+func GetMimeType(filename string) string {
+	return mime.TypeByExtension(strings.ToLower(filepath.Ext(filename)))
 }

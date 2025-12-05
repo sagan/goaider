@@ -4,9 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"mime"
 	"os"
-	"path/filepath"
 	"strings"
 	"unicode/utf8"
 
@@ -79,7 +77,7 @@ func doBase64encode(cmd *cobra.Command, args []string) (err error) {
 					mimeType = "application/octet-stream"
 				}
 			} else if flagInput != "" {
-				mimeType = mime.TypeByExtension(strings.ToLower(filepath.Ext(flagInput)))
+				mimeType = util.GetMimeType(flagInput)
 			}
 			if mimeType == "" {
 				mimeType = "application/octet-stream"

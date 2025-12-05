@@ -86,7 +86,7 @@ func doRun(cmd *cobra.Command, args []string) (err error) {
 			}
 			err = outputs.Save(outputPath, flagForce)
 		} else {
-			err = outputs.SaveAll(flagOutputDir, flagForce)
+			err = outputs.SaveAll(flagOutputDir, flagForce, "")
 		}
 		if err != nil {
 			return err

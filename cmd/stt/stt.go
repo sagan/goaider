@@ -3,7 +3,6 @@ package cmd
 import (
 	"encoding/base64"
 	"fmt"
-	"mime"
 	"os"
 	"path/filepath"
 	"strings"
@@ -69,8 +68,8 @@ func stt(cmd *cobra.Command, args []string) error {
 		}
 
 		fileName := file.Name()
-		fileExt := strings.ToLower(filepath.Ext(fileName))
-		mimeType := mime.TypeByExtension(fileExt)
+		fileExt := filepath.Ext(fileName)
+		mimeType := util.GetMimeType(fileExt)
 
 		if !strings.HasPrefix(mimeType, "audio/") {
 			// log.Printf("Skipping non-audio file: %s", fileName)

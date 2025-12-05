@@ -339,7 +339,7 @@ func InputFileAndOutput(input, output string, force bool, processor func(r io.Re
 		tempFile = nil // Set to nil so the deferred cleanup doesn't delete it
 
 		// Atomic replace
-		if err := os.Rename(tempName, output); err != nil {
+		if err := atomic.ReplaceFile(tempName, output); err != nil {
 			return fmt.Errorf("failed to overwrite file: %w", err)
 		}
 	}

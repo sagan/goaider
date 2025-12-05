@@ -21,6 +21,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/sagan/goaider/util"
+	"github.com/sagan/goaider/util/pathutil"
 )
 
 // ComfyUI "LoadImage" node, widgets_values[0] is the filename that must be uploaded to server "input/" folder first.
@@ -135,14 +136,21 @@ func (outputs ComfyuiOutputs) Save(filename string, force bool) (err error) {
 
 // Save all outputs to dir.
 // If force is true, overwrite any existing file, otherwise skip them.
-func (outputs ComfyuiOutputs) SaveAll(dir string, force bool) error {
+// The savePrefix is used as saved filenames prefix.
+func (outputs ComfyuiOutputs) SaveAll(dir string, force bool, savePrefix string) error {
+	if savePrefix != "" {
+		savePrefix = pathutil.CleanBasename(savePrefix)
+		if !strings.HasSuffix(savePrefix, "-") && !strings.HasSuffix(savePrefix, "_") {
+			savePrefix += "_"
+		}
+	}
 	var lastErr error
 	for _, output := range outputs {
 		if output.Type == "text" {
 			fmt.Printf("text output %s: %s\n", output.Filename, output.Text)
 			continue
 		}
-		outputFile := filepath.Join(dir, output.Filename)
+		outputFile := filepath.Join(dir, savePrefix+output.Filename)
 		if exists, err := util.FileExists(outputFile); err != nil || (exists && !force) {
 			if err != nil {
 				lastErr = fmt.Errorf("output file %q access failed: %w", outputFile, err)

@@ -1,7 +1,6 @@
 package batchgen
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"log"
@@ -47,14 +46,15 @@ Painting a masterpiece on a canvas of starlight,在星光画布上绘制杰作
 Building a sandcastle kingdom on an alien beach,在异星海滩上建造沙堡王国
 <<<
 
-contexts.txt (optional) example:
+contexts.csv (optional) example:
 >>>
-Ghibli-esque enchanted forest at dawn, soft volumetric lighting
-Cyberpunk neon street market at night, rain-slicked surfaces
-Baroque grand ballroom, golden hour light streaming through tall windows
-Steampunk airship soaring above a cloud sea, brass and leather textures
-Ancient Egyptian tomb, torchlight flickering on hieroglyphs
-Psychedelic dreamscape, swirling vibrant colors and impossible geometry
+context,context_zh
+"Ghibli-esque enchanted forest at dawn, soft volumetric lighting",黎明时分，吉卜力风格的魔法森林，柔和的立体光
+"Cyberpunk neon street market at night, rain-slicked surfaces",夜幕下的赛博朋克霓虹街市，雨后湿滑的表面
+"Baroque grand ballroom, golden hour light streaming through tall windows",巴洛克式大宴会厅，夕阳的余晖透过高大的窗户洒入室内。
+"Steampunk airship soaring above a cloud sea, brass and leather textures",蒸汽朋克风格的飞艇翱翔于云海之上，黄铜和皮革质感。
+"Ancient Egyptian tomb, torchlight flickering on hieroglyphs",古埃及陵墓，火炬的光芒在象形文字上摇曳。
+"Psychedelic dreamscape, swirling vibrant colors and impossible geometry",迷幻的梦境，绚丽的色彩旋转，以及不可思议的几何图形
 <<<
 
 In this configuration (5 actions, 6 contextes, batch = 8), it will overall run the workflow 5*6*8 times.
@@ -69,6 +69,11 @@ run the program again with "--resume <resume_token>" to resume from the last poi
 type Action struct {
 	Action   string `json:"action,omitempty"`
 	ActionZh string `json:"action_zh,omitempty"`
+}
+
+type Context struct {
+	Context   string `json:"context,omitempty"`
+	ContextZh string `json:"context_zh,omitempty"`
 }
 
 var (
@@ -98,7 +103,7 @@ func init() {
 		`Special values: "%rand%" : a random seed; "%prompt%" : the generated prompt from action & context`)
 	batchGenCmd.Flags().StringVarP(&flagWorkflow, "workflow", "w", "", "(Required) Workflow file path")
 	batchGenCmd.Flags().StringVarP(&flagActions, "actions", "a", "", "(Required) Actions CSV file")
-	batchGenCmd.Flags().StringVarP(&flagContext, "contexts", "c", "", "Contexts file")
+	batchGenCmd.Flags().StringVarP(&flagContext, "contexts", "c", "", "Contexts CSV file")
 	batchGenCmd.Flags().StringArrayVarP(&flagServer, "server", "s", []string{"127.0.0.1:8188"},
 		"ComfyUI server address(es)")
 	batchGenCmd.Flags().StringVarP(&flagResume, "resume", "r", "", "Resume from token 'actionIdx:contextIdx'")
@@ -163,7 +168,7 @@ func doBatchGen(cmd *cobra.Command, args []string) error {
 			continue
 		}
 
-		for cIdx, contextStr := range contexts {
+		for cIdx, context := range contexts {
 			// Skip contexts if resuming within the starting action
 			if aIdx == startAIdx && cIdx < startCIdx {
 				processedBatches++
@@ -175,12 +180,12 @@ func doBatchGen(cmd *cobra.Command, args []string) error {
 
 			processedBatches++
 			log.Printf("Processing batch [%d/%d] | Action: %s... | Context: %s...",
-				processedBatches, totalBatches, truncate(action.Action, 20), truncate(contextStr, 20))
+				processedBatches, totalBatches, truncate(action.Action, 20), truncate(context.Context, 20))
 
 			// Construct Prompt and Path
 			combinedPrompt := action.Action
-			if contextStr != "" {
-				combinedPrompt = fmt.Sprintf("%s, %s", combinedPrompt, contextStr)
+			if context.Context != "" {
+				combinedPrompt = fmt.Sprintf("%s, %s", combinedPrompt, context.Context)
 			}
 			subDir := util.FirstNonZeroArg(action.ActionZh, action.Action, "default")
 			subDir = pathutil.CleanBasename(subDir)
@@ -281,7 +286,7 @@ func executeWorkflow(client *api.Client, prompt, outputDir string) error {
 	}
 
 	// 4. Save
-	return outputs.SaveAll(outputDir, flagForce)
+	return outputs.SaveAll(outputDir, flagForce, "")
 }
 
 // --- Helper Functions ---
@@ -295,28 +300,13 @@ func loadActions(path string) ([]*Action, error) {
 	return csvfeature.UnmarshalCsv[*Action](f)
 }
 
-func loadContexts(path string) ([]string, error) {
-	if path == "" {
-		return []string{""}, nil
-	}
+func loadContexts(path string) ([]*Context, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, fmt.Errorf("open contexts: %w", err)
+		return nil, fmt.Errorf("open actions: %w", err)
 	}
 	defer f.Close()
-
-	var lines []string
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		text := strings.TrimSpace(scanner.Text())
-		if text != "" {
-			lines = append(lines, text)
-		}
-	}
-	if len(lines) == 0 {
-		return []string{""}, nil
-	}
-	return lines, nil
+	return csvfeature.UnmarshalCsv[*Context](f)
 }
 
 func updateState(aIdx, cIdx int) {

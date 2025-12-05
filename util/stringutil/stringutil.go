@@ -1,6 +1,7 @@
 package stringutil
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"io"
@@ -131,4 +132,19 @@ var newLinesRegex = regexp.MustCompile(`[\r\n]+`)
 // Replace one or more consecutive newline characters (\r, \n) with single space.
 func ReplaceNewLinesWithSpace(str string) string {
 	return newLinesRegex.ReplaceAllString(str, " ")
+}
+
+// SplitLines splits a string into lines, trimming whitespace from each line.
+// It handles various newline characters (\r, \n, \r\n).
+// Empty lines (after trimming) are included in the result.
+// It ignores the trailing new line in str, e.g.  "Line 1\nLine 2\n\n"  => ["Line 1", "Line 2"].
+func SplitLines(str string) (lines []string) {
+	sc := bufio.NewScanner(strings.NewReader(str))
+	for sc.Scan() {
+		lines = append(lines, strings.TrimSpace(sc.Text()))
+	}
+	if err := sc.Err(); err != nil {
+		panic(err) // don't expect an error
+	}
+	return lines
 }

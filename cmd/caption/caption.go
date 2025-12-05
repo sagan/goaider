@@ -3,7 +3,6 @@ package caption
 import (
 	"encoding/base64"
 	"fmt"
-	"mime"
 	"os"
 	"path/filepath"
 	"strings"
@@ -150,7 +149,7 @@ func processImage(imagePath string, apiKey string, force bool, identity string) 
 		return fmt.Errorf("failed to read image: %w", err)
 	}
 	base64Image := base64.StdEncoding.EncodeToString(imageData)
-	mimeType := mime.TypeByExtension(strings.ToLower(filepath.Ext(imagePath)))
+	mimeType := util.GetMimeType(imagePath)
 
 	// 3. Construct the API request payload
 	payload := &llm.GeminiRequest{
