@@ -27,6 +27,7 @@ require (
 	github.com/saintfish/chardet v0.0.0-20230101081208-5e3ef4b5456d
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.10.1
+	github.com/vincent-petithory/dataurl v1.0.0
 	github.com/xxr3376/gtboard v0.0.2
 	golang.design/x/clipboard v0.7.1
 	golang.org/x/exp v0.0.0-20251125195548-87e1e737ad39

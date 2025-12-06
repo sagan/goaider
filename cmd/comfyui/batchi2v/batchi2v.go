@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -35,7 +34,7 @@ type I2VResponse struct {
 	// The detailed prompt for the video generation model
 	Prompt string `json:"prompt" jsonschema:"description=A detailed and cinematic description of the movement and scene for video generation that's under 50 words."`
 	// A short, filename-friendly description (e.g., "cat_running_grass")
-	ShortDescription string `json:"short_description_zh" jsonschema:"description=A very short (3-5 word) Simplified Chinese summary suitable for a filename."`
+	ShortDescriptionZh string `json:"short_description_zh" jsonschema:"description=A very short (3-5 word) Simplified Chinese summary suitable for a filename."`
 }
 
 var batchI2VCmd = &cobra.Command{
@@ -75,9 +74,9 @@ var (
 func init() {
 	batchI2VCmd.Flags().BoolVar(&flagForce, "force", false, "Force overwrite existing videos")
 	batchI2VCmd.Flags().IntVarP(&flagBatch, "batch", "b", 1, "Number of variations to generate per image")
-	batchI2VCmd.Flags().StringVarP(&flagWorkflow, "workflow", "w", "", "Workflow JSON file")
-	batchI2VCmd.Flags().StringVarP(&flagInput, "input", "i", "", "Directory containing input images")
-	batchI2VCmd.Flags().StringVarP(&flagOutput, "output", "o", "output", "Directory to save generated videos")
+	batchI2VCmd.Flags().StringVarP(&flagWorkflow, "workflow", "w", "", "(Required) Workflow JSON file")
+	batchI2VCmd.Flags().StringVarP(&flagInput, "input", "i", "", "(Required) Directory containing input images")
+	batchI2VCmd.Flags().StringVarP(&flagOutput, "output", "o", "", "(Required) Directory to save generated videos")
 	batchI2VCmd.Flags().StringArrayVarP(&flagServer, "server", "s", []string{"127.0.0.1:8188"},
 		"ComfyUI server address(es)")
 	batchI2VCmd.Flags().StringArrayVarP(&flagVars, "var", "v", nil,
@@ -90,6 +89,7 @@ func init() {
 		"Resume from this image basename (skips alphabetically previous images)")
 	batchI2VCmd.MarkFlagRequired("workflow")
 	batchI2VCmd.MarkFlagRequired("input")
+	batchI2VCmd.MarkFlagRequired("output")
 	comfyui.ComfyuiCmd.AddCommand(batchI2VCmd)
 }
 
@@ -274,15 +274,6 @@ func i2vWorker(ctx context.Context, pool chan *api.Client, tasks <-chan i2vTask,
 	}
 }
 
-// sanitizeFilename removes unsafe characters for filenames
-func sanitizeFilename(name string) string {
-	// Replace spaces with underscores
-	name = strings.ReplaceAll(name, " ", "_")
-	// Remove non-alphanumeric characters except underscores and hyphens
-	reg := regexp.MustCompile(`[^a-zA-Z0-9_-]+`)
-	return reg.ReplaceAllString(name, "")
-}
-
 func processI2V(ctx context.Context, pool chan *api.Client, task i2vTask) error {
 	log.Printf("[Img %d/%d | Batch %d/%d] Processing %s...",
 		task.imgIndex, task.totalImages, task.batchIndex, flagBatch, task.baseName)
@@ -308,23 +299,17 @@ func processI2V(ctx context.Context, pool chan *api.Client, task i2vTask) error 
 				imgData,
 				mimeType,
 			)
+			log.Printf("llm request %s response: %s", flagPromptTmpl, util.ToJson(llmResp))
 			return lErr
 		})
 
 		if err != nil {
 			return fmt.Errorf("LLM generation failed: %w", err)
 		}
-
-		// Fallback if LLM returns empty description
-		if llmResp.ShortDescription == "" {
-			llmResp.ShortDescription = "vid"
-		}
-
-		llmResp.ShortDescription = sanitizeFilename(llmResp.ShortDescription)
-		log.Printf("    📝 [%s] Desc: %s", task.baseName, llmResp.ShortDescription)
+		log.Printf("    📝 [%s] Desc: %s", task.baseName, llmResp.ShortDescriptionZh)
 	} else {
 		// Default if no prompt
-		llmResp.ShortDescription = "batch"
+		llmResp.ShortDescriptionZh = "batch"
 	}
 
 	// B. ComfyUI Execution
@@ -399,7 +384,7 @@ func executeI2VWorkflow(client *api.Client, task i2vTask, llmResp *I2VResponse) 
 	}
 
 	// Pass ShortDescription as the 3rd argument (prefix)
-	return outputs.SaveAll(flagOutput, flagForce, llmResp.ShortDescription)
+	return outputs.SaveAll(flagOutput, flagForce, llmResp.ShortDescriptionZh)
 }
 
 func retry(attempts int, fn func() error) error {

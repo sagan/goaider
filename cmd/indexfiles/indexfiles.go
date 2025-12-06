@@ -33,7 +33,7 @@ var indexfilesCmd = &cobra.Command{
 	Long: `Index files in a directory.
 
 It outputs a csv with these columns (alphabetically sorted):
-  base,dir_name,dir_path,ext,ext_nodot,mtime,name,path,sha256,size
+  base,dir_name,dir_path,ext,ext_nodot,mime,mtime,name,path,sha256,size
 
 The Go file info struct schema:
 
@@ -45,6 +45,7 @@ type FileInfo struct {
 	Base     string         // "baz"
 	Ext      string         // ".wav"
 	ExtNodot string         // "wav"
+	Mime     string         // "audio/wav", empty if unknown
 	Size     int64          // 1024
 	Mtime    time.Time      // modified time. output to csv in "YYYY-MM-DDTHH:mm:ssZ" format
 	Sha256   string         // hex string (lower case)

@@ -24,24 +24,28 @@ var pasteCmd = &cobra.Command{
 	Short: "Paste clipboard to file. Windows only",
 	Long: `Paste clipboard to file. Windows only.
 
-- If [filename] is "-", it outputs clipboard contents to stdout.
-- If [filename] is not "-", it outputs clipboard contents to the file
+Output file path can be set by [filename] or --output <filename>.
+
+- If {filename} is "-", it outputs clipboard contents to stdout.
+- If {filename} is not "-", it outputs clipboard contents to the file
   and outputs the full path of written file to stdout on success.
-- If [filename] is not set, a "clipboard-<timestamp>" style name .txt or .png file
+- If {filename} is not set, a "clipboard-<timestamp>" style name .txt or .png file
   in dir (default to ".") is used, where <timestamp> is yyyyMMddHHmmss format.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: doPaste,
 }
 
 var (
-	flagDir   string // Manually specify output dir, if set, it's joined with filename
-	flagForce bool   // override existing file
+	flagForce  bool   // override existing file
+	flagDir    string // Manually specify output dir, if set, it's joined with filename
+	flagOutput string
 )
 
 func init() {
-	pasteCmd.Flags().StringVarP(&flagDir, "dir", "d", "", "Optional: output dir. Defaults to current dir. "+
-		"If both --dir flag and [filename] arg are set, the joined path of them is used")
 	pasteCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Optional: override existing file")
+	pasteCmd.Flags().StringVarP(&flagDir, "dir", "d", ".", "Optional: output dir. "+
+		"If both --dir flag and {filename} are set, the joined path is used")
+	pasteCmd.Flags().StringVarP(&flagOutput, "output", "o", "", `Output file path. Use "-" for stdout`)
 	cmd.RootCmd.AddCommand(pasteCmd)
 }
 
@@ -51,15 +55,18 @@ func doPaste(cmd *cobra.Command, args []string) (err error) {
 		return err
 	}
 
-	argFilename := ""
 	fullpath := ""
-	if len(args) > 0 {
-		argFilename = args[0]
+	if len(args) > 0 && flagOutput != "" {
+		return fmt.Errorf("--output flag and [filename] argument can NOT be both set")
+	} else if len(args) > 0 {
+		flagOutput = args[0]
 		fullpath = args[0]
+	} else if flagOutput != "" {
+		fullpath = flagOutput
 	} else {
 		fullpath = "clipboard-" + time.Now().Format("20060102150304")
 	}
-	if argFilename != "-" {
+	if flagOutput != "-" {
 		fullpath = filepath.Join(flagDir, fullpath)
 		fullpath, err = filepath.Abs(fullpath)
 		if err != nil {
@@ -73,9 +80,9 @@ func doPaste(cmd *cobra.Command, args []string) (err error) {
 		return err
 	}
 	if isImage {
-		if argFilename == "" { // only append ext if filename is not provided by user
+		if flagOutput == "" { // only append ext if filename is not provided by user
 			fullpath += ".png"
-		} else if argFilename == "-" {
+		} else if flagOutput == "-" {
 			if term.IsTerminal(int(os.Stdout.Fd())) && !flagForce {
 				return fmt.Errorf("clipboard is image but stdout is tty, refuse to write")
 			}
@@ -83,9 +90,9 @@ func doPaste(cmd *cobra.Command, args []string) (err error) {
 			return fmt.Errorf("clipboard is png image but filename ext is not")
 		}
 	} else if len(data) > 0 {
-		if argFilename == "" {
+		if flagOutput == "" {
 			fullpath += ".txt"
-		} else if argFilename != "-" {
+		} else if flagOutput != "-" {
 			if strings.HasPrefix(util.GetMimeType(fullpath), "image/") {
 				return fmt.Errorf("clipboard is text but provided filename is image ext")
 			}
@@ -94,12 +101,12 @@ func doPaste(cmd *cobra.Command, args []string) (err error) {
 		return fmt.Errorf("clipboard has no valid data")
 	}
 
-	if argFilename == "" {
+	if flagOutput == "" {
 		fullpath, err = helper.GetNewFilePath(fullpath, "")
 		if err != nil {
 			return err
 		}
-	} else if argFilename == "-" {
+	} else if flagOutput == "-" {
 		_, err = os.Stdout.Write(data)
 		return err
 	} else if exists, err := util.FileExists(fullpath); err != nil || (exists && !flagForce) {
@@ -111,7 +118,7 @@ func doPaste(cmd *cobra.Command, args []string) (err error) {
 		return err
 	}
 
-	if argFilename != "-" {
+	if flagOutput != "-" {
 		fmt.Print(fullpath)
 	}
 	return nil

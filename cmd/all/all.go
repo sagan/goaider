@@ -9,6 +9,7 @@ import (
 	_ "github.com/sagan/goaider/cmd/crop"
 	_ "github.com/sagan/goaider/cmd/csv/all"
 	_ "github.com/sagan/goaider/cmd/extractall"
+	_ "github.com/sagan/goaider/cmd/findfiles"
 	_ "github.com/sagan/goaider/cmd/indexfiles"
 	_ "github.com/sagan/goaider/cmd/norfilenames"
 	_ "github.com/sagan/goaider/cmd/parsetfef"

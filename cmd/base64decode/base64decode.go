@@ -10,10 +10,12 @@ import (
 	"unicode/utf8"
 
 	"github.com/natefinch/atomic"
+	"github.com/spf13/cobra"
+	"github.com/vincent-petithory/dataurl"
+	"golang.org/x/term"
+
 	"github.com/sagan/goaider/cmd"
 	"github.com/sagan/goaider/util"
-	"github.com/spf13/cobra"
-	"golang.org/x/term"
 )
 
 var base64decodeCmd = &cobra.Command{
@@ -22,9 +24,11 @@ var base64decodeCmd = &cobra.Command{
 	Short:   "Base64 decode",
 	Long: `Base64 decode.
 
-If <filename> is "-", read from stdin.
+Either [base64_string] argument or --input flag is used as source data.
+If --input is "-", read from stdin.
 
-It automatically detects the input base64 string type (standard / URL-safe base64, with or without padding).`,
+It automatically detects the input base64 string type (standard / URL-safe base64, with or without padding).
+It's also able to decode a "data:" url and output payload data`,
 	RunE: doBase64decode,
 }
 
@@ -69,7 +73,13 @@ func doBase64decode(cmd *cobra.Command, args []string) (err error) {
 	}
 	inputString := string(inputBytes)
 	var decodedBytes []byte
-	if strings.ContainsAny(inputString, "+/") {
+	if strings.HasPrefix(inputString, "data:") {
+		dataURL, err := dataurl.DecodeString(inputString)
+		if err != nil {
+			return fmt.Errorf("failed to decode data URL: %w", err)
+		}
+		decodedBytes = dataURL.Data
+	} else if strings.ContainsAny(inputString, "+/") {
 		decodedBytes, err = base64.StdEncoding.DecodeString(inputString)
 	} else {
 		decodedBytes, err = base64.URLEncoding.DecodeString(inputString)

@@ -29,6 +29,7 @@ type FileInfo struct {
 	Base     string         `json:"base"`      // "baz"
 	Ext      string         `json:"ext"`       // ".wav"
 	ExtNodot string         `json:"ext_nodot"` // "wav"
+	Mime     string         `json:"mime"`      // "audio/wav", empty if unknown
 	Size     int64          `json:"size"`      // Changed from int to int64 to match os.FileInfo
 	Mtime    time.Time      `json:"mtime"`     // modified time
 	Sha256   string         `json:"sha256"`    // hex string (lower case)
@@ -359,6 +360,7 @@ func doIndex(dir string, allowedExts []string) (filelist FileList, err error) {
 			Base:     base,
 			Ext:      ext,
 			ExtNodot: extNoDot,
+			Mime:     util.GetMimeType(fileName),
 			Size:     info.Size(),
 			Mtime:    mTime,
 			Sha256:   hash,

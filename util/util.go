@@ -633,7 +633,13 @@ func FirstNonZeroArg[T comparable](args ...T) T {
 	return empty
 }
 
-// Get mime type (e.g. text/plain) from file path / name / ext
+// Get mime type (e.g. "text/plain") from file path / name / ext.
+// Returned mime type doesn't have parameter part (like "; charset=utf-8").
+// Return empty string if mime is unknown.
 func GetMimeType(filename string) string {
-	return mime.TypeByExtension(strings.ToLower(filepath.Ext(filename)))
+	mimeType := mime.TypeByExtension(strings.ToLower(filepath.Ext(filename)))
+	if i := strings.IndexByte(mimeType, ';'); i != -1 {
+		mimeType = mimeType[:i]
+	}
+	return mimeType
 }
