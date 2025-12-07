@@ -3,7 +3,6 @@ package genlist
 import (
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -20,8 +19,10 @@ import (
 	"github.com/sagan/goaider/util/stringutil"
 )
 
-const ACTIONS_FILE = "actions.csv"
-const CONTEXTS_FILE = "contexts.txt"
+const (
+	ACTIONS_FILE  = "actions.csv"
+	CONTEXTS_FILE = "contexts.txt"
+)
 
 var genCmd = &cobra.Command{
 	Use:   "genlist",
@@ -32,16 +33,18 @@ var genCmd = &cobra.Command{
 }
 
 var (
-	flagForce  bool
-	flagModel  string
-	flatOutput string // output dir
+	flagForce    bool
+	flagModel    string
+	flagModelKey string
+	flatOutput   string // output dir
 )
 
 func init() {
 	genCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Force overwriting without confirmation")
 	genCmd.Flags().StringVarP(&flatOutput, "output", "o", ".", `Output dir`)
-	genCmd.Flags().StringVarP(&flagModel, "model", "", constants.DEFAULT_GEMINI_MODEL,
+	genCmd.Flags().StringVarP(&flagModel, "model", "", constants.DEFAULT_MODEL,
 		"The model to use. "+constants.HELP_MODEL)
+	genCmd.Flags().StringVarP(&flagModelKey, "model-key", "", "", constants.HELP_MODEL_KEY)
 	comfyui.ComfyuiCmd.AddCommand(genCmd)
 }
 
@@ -55,11 +58,7 @@ func doGen(cmd *cobra.Command, args []string) (err error) {
 		return fmt.Errorf("contexts file %q exists or can't access, err=%w", contextsFile, err)
 	}
 
-	apiKey := os.Getenv(constants.ENV_GEMINI_API_KEY)
-	if apiKey == "" {
-		return fmt.Errorf("GEMINI_API_KEY environment variable not set")
-	}
-	lists, err := llm.GeminiJsonResponse[api.CreativeLists](apiKey, flagModel, api.PromptActionList("a person"))
+	lists, err := llm.ChatJsonResponse[api.CreativeLists](flagModelKey, flagModel, api.PromptActionList("a person"))
 	if err != nil {
 		return err
 	}

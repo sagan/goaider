@@ -37,8 +37,8 @@ permissions required for the service account: Cloud Translation API User.
 
 Usage:
 - goaider translate "Bonjour" # translate text
-- goaider translate --input foo.txt # read from file and translate
-- goaider translate --input - # Read from stdin and translate
+- goaider translate -i foo.txt # read from file and translate
+- goaider translate -i - # Read from stdin and translate
 
 By default it outputs to stdout. Use --output flag to output to file.
 
@@ -66,9 +66,11 @@ func init() {
 	translateCmd.Flags().BoolVarP(&flagAutoCopy, "auto-copy", "C", false, `Auto copy translated text to clipboard. `+
 		`It works on Windows only`)
 	translateCmd.Flags().StringVarP(&flagTargetLang, "target", "t", "en",
-		`Target language. Any of: "ja", "fr", "ru", "es", "de", "en", "zh", "zh-cn", "zh-tw", "chs", "cht"`)
+		`Target language. Any of: `+
+			`"en", "ja", "fr", "de", "es", "pt", "kr", "ru", "ar", "zh-tw", "zh", "zh-cn", "cht", "chs"`)
 	translateCmd.Flags().StringVarP(&flagSourceLang, "source", "s", "auto",
-		`Source language. Any of: "auto", "ja", "fr", "ru", "es", "de", "en", "zh", "zh-cn", "zh-tw", "chs", "cht"`)
+		`Source language. Any of: "auto", `+
+			`"en", "ja", "fr", "de", "es", "pt", "kr", "ru", "ar", "zh-tw", "zh", "zh-cn", "cht", "chs"`)
 	translateCmd.Flags().StringVarP(&flagInput, "input", "i", "", `Read text from input file. Use "-" for stdin`)
 	translateCmd.Flags().StringVarP(&flagOutput, "output", "o", "-", `Output file path. Use "-" for stdout`)
 	translateCmd.Flags().StringVarP(&flagOutputPrefix, "output-prefix", "P", "",

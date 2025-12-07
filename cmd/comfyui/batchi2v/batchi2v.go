@@ -57,18 +57,18 @@ Resume Example:
 }
 
 var (
-	flagForce       bool
-	flagBatch       int
-	flagWorkflow    string
-	flagInput       string
-	flagOutput      string
-	flagServer      []string
-	flagVars        []string
-	flagGeminiKey   string
-	flagGeminiModel string
-	flagNoPrompt    bool
-	flagPromptTmpl  string
-	flagResume      string
+	flagForce      bool
+	flagNoPrompt   bool
+	flagBatch      int
+	flagWorkflow   string
+	flagInput      string
+	flagOutput     string
+	flagModel      string
+	flagModelKey   string
+	flagPromptTmpl string
+	flagResume     string
+	flagServer     []string
+	flagVars       []string
 )
 
 func init() {
@@ -81,8 +81,9 @@ func init() {
 		"ComfyUI server address(es)")
 	batchI2VCmd.Flags().StringArrayVarP(&flagVars, "var", "v", nil,
 		`Set variables. Use "%image%" for input image, "%prompt%" for LLM text, "%rand%" for random seed.`)
-	batchI2VCmd.Flags().StringVarP(&flagGeminiModel, "model", "", constants.DEFAULT_GEMINI_MODEL,
+	batchI2VCmd.Flags().StringVarP(&flagModel, "model", "", constants.DEFAULT_MODEL,
 		"The Model to use. "+constants.HELP_MODEL)
+	batchI2VCmd.Flags().StringVarP(&flagModelKey, "model-key", "", "", constants.HELP_MODEL_KEY)
 	batchI2VCmd.Flags().BoolVarP(&flagNoPrompt, "no-prompt", "", false, "Skip LLM prompt generation")
 	batchI2VCmd.Flags().StringVarP(&flagPromptTmpl, "prompt-template", "", DEFAULT_PROMPT,
 		"Instruction prompt for the LLM")
@@ -130,11 +131,6 @@ func (p *ProgressTracker) GetResumeString() string {
 }
 
 func doBatchI2V(cmd *cobra.Command, args []string) error {
-	flagGeminiKey = os.Getenv("GEMINI_API_KEY")
-	if !flagNoPrompt && flagGeminiKey == "" {
-		return fmt.Errorf("error: Gemini API key is required")
-	}
-
 	// 1. Setup Context with Signal Cancellation
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -298,10 +294,9 @@ func processI2V(ctx context.Context, pool chan *api.Client, task i2vTask) error 
 
 		err = retry(3, func() error {
 			var lErr error
-			// Call the new JSON-enforcing function
-			llmResp, lErr = llm.GeminiImageToJson[I2VResponse](
-				flagGeminiKey,
-				flagGeminiModel,
+			llmResp, lErr = llm.ImageToJson[I2VResponse](
+				flagModelKey,
+				flagModel,
 				flagPromptTmpl, // Template should instruct to fill the JSON fields
 				imgData,
 				mimeType,

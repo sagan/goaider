@@ -18,8 +18,9 @@ import (
 )
 
 var (
-	flagForce bool
-	flagModel string
+	flagForce    bool
+	flagModel    string
+	flagModelKey string
 )
 
 // sttCmd represents the stt command
@@ -42,17 +43,13 @@ Requires the GEMINI_API_KEY environment variable to be set.`,
 func init() {
 	cmd.RootCmd.AddCommand(sttCmd)
 	sttCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Overwrite existing .txt transcript files")
-	sttCmd.Flags().StringVarP(&flagModel, "model", "", constants.DEFAULT_GEMINI_MODEL,
+	sttCmd.Flags().StringVarP(&flagModel, "model", "", constants.DEFAULT_MODEL,
 		"The model to use for transcription. "+constants.HELP_MODEL)
+	sttCmd.Flags().StringVarP(&flagModelKey, "model-key", "", "", constants.HELP_MODEL_KEY)
 }
 
 func stt(cmd *cobra.Command, args []string) error {
 	argDir := args[0]
-	apiKey := os.Getenv(constants.ENV_GEMINI_API_KEY)
-	if apiKey == "" {
-		return fmt.Errorf("error: %s environment variable not set", constants.ENV_GEMINI_API_KEY)
-	}
-
 	log.Printf("Using model: %s", flagModel)
 
 	// Read all files in the directory
@@ -100,7 +97,7 @@ func stt(cmd *cobra.Command, args []string) error {
 		}
 
 		// 2. Call Gemini API
-		transcript, err := getTranscript(apiKey, flagModel, audioData, mimeType)
+		transcript, err := getTranscript(flagModelKey, flagModel, audioData, mimeType)
 		if err != nil {
 			log.Printf("Error generating transcript for %s: %v", fileName, err)
 			errorCnt++

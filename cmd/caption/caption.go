@@ -1,7 +1,6 @@
 package caption
 
 import (
-	"encoding/base64"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,8 +14,6 @@ import (
 	"github.com/sagan/goaider/features/llm"
 	"github.com/sagan/goaider/util"
 )
-
-// --- API and Program Constants ---
 
 const (
 	// This prompt is optimized for LoRa training captions
@@ -35,17 +32,16 @@ CRITICAL:
 Good example: "pink puffer jacket, ponytail, hair clips, crouching, holding toy".
 
 Bad example: "young girl, pink puffer jacket, fur collar, black pants, slippers, pink bunny hair clips, ponytail, pink bobbles, crouching, holding a pink plastic toy, child's room, pink desk, pink chair, toys, curtains, wooden floor".
-"
 `
 
-	maxRetries = 3 // Number of retries for API calls
+	maxRetries = 3
 )
 
-// Flag variables to store command line arguments
 var (
 	flagForce    bool
 	flagIdentity string
 	flagModel    string
+	flagModelKey string
 )
 
 var captionCmd = &cobra.Command{
@@ -66,20 +62,14 @@ func init() {
 		"Optional: Force re-generation of all captions, even if .txt files exist")
 	captionCmd.Flags().StringVarP(&flagIdentity, "identity", "", "",
 		"Optional: The trigger word (e.g., 'foobar' or 'photo of foobar') to prepend to each caption")
-	captionCmd.Flags().StringVarP(&flagModel, "model", "", constants.DEFAULT_GEMINI_MODEL,
+	captionCmd.Flags().StringVarP(&flagModel, "model", "", constants.DEFAULT_MODEL,
 		"The model to use for captioning. "+constants.HELP_MODEL)
+	captionCmd.Flags().StringVarP(&flagModelKey, "model-key", "", "", constants.HELP_MODEL_KEY)
 }
 
 func caption(cmd *cobra.Command, args []string) error {
 	argDir := args[0]
 
-	// 1. Get API Key from environment
-	apiKey := os.Getenv(constants.ENV_GEMINI_API_KEY)
-	if apiKey == "" {
-		return fmt.Errorf("GEMINI_API_KEY environment variable not set")
-	}
-
-	// 3. Read the specified directory
 	files, err := os.ReadDir(argDir)
 	if err != nil {
 		return fmt.Errorf("failed to read directory %s: %w", argDir, err)
@@ -94,16 +84,16 @@ func caption(cmd *cobra.Command, args []string) error {
 	}
 
 	errorCnt := 0
-	// 4. Loop over all files and process images
 	for _, file := range files {
-		if file.IsDir() || !isImageFile(file.Name()) {
-			continue // Skip directories and non-image files
+		if file.IsDir() {
+			continue
 		}
-
+		mimeType := util.GetMimeType(file.Name())
+		if !strings.HasPrefix(mimeType, "image/") {
+			continue
+		}
 		fullPath := filepath.Join(argDir, file.Name())
-
-		// processImage does all the work: API call, retries, and file saving
-		err := processImage(fullPath, apiKey, flagForce, flagIdentity)
+		err := processImage(fullPath, mimeType, flagModelKey, flagForce, flagIdentity)
 		if err != nil {
 			fmt.Printf("Processing %s: ❌ FAILED (%v)\n", file.Name(), err)
 			errorCnt++
@@ -120,13 +110,11 @@ func caption(cmd *cobra.Command, args []string) error {
  * processImage handles the full logic for a single image:
  * 1. Checks if caption file exists (and skips if -force is not set)
  * 2. Reads the image file
- * 3. Encodes it to base64
- * 4. Calls the Gemini API (with retries)
- * 5. Parses the response
- * 6. Prepends identity (if provided)
- * 7. Saves the caption to a .txt file
+ * 3. Calls the LLM API (with retries)
+ * 4. Prepends identity (if provided)
+ * 5. Saves the caption to a .txt file
  */
-func processImage(imagePath string, apiKey string, force bool, identity string) (err error) {
+func processImage(imagePath string, mimeType string, apiKey string, force bool, identity string) (err error) {
 	// 1. Check for existing .txt file before doing any work
 	baseName := filepath.Base(imagePath)
 	ext := filepath.Ext(baseName)
@@ -142,36 +130,14 @@ func processImage(imagePath string, apiKey string, force bool, identity string) 
 	}
 
 	fmt.Printf("Processing %s: ⏳ GENERATING...\n", baseName)
-
-	// 2. Read image file and encode to base64
 	imageData, err := os.ReadFile(imagePath)
 	if err != nil {
 		return fmt.Errorf("failed to read image: %w", err)
 	}
-	base64Image := base64.StdEncoding.EncodeToString(imageData)
-	mimeType := util.GetMimeType(imagePath)
 
-	// 3. Construct the API request payload
-	payload := &llm.GeminiRequest{
-		Contents: []llm.Content{
-			{
-				Role: "user",
-				Parts: []llm.Part{
-					{Text: captionPrompt}, // The prompt to the model
-					{
-						InlineData: &llm.InlineData{ // The image data
-							MimeType: mimeType,
-							Data:     base64Image,
-						},
-					},
-				},
-			},
-		},
-	}
-
-	var geminiRes *llm.GeminiResponse
+	var caption string
 	for retries := range maxRetries {
-		geminiRes, err = llm.Gemini(apiKey, flagModel, payload)
+		caption, err = llm.ImageToText(apiKey, flagModel, captionPrompt, imageData, mimeType)
 		if err == nil {
 			break
 		}
@@ -187,13 +153,11 @@ func processImage(imagePath string, apiKey string, force bool, identity string) 
 	if err != nil {
 		return err
 	}
-	caption := geminiRes.Candidates[0].Content.Parts[0].Text
-	finalCaption := strings.TrimSpace(caption) // Clean up any extra whitespace
+
+	finalCaption := caption
 	if identity != "" {
 		finalCaption = identity + ", " + finalCaption
 	}
-
-	// 7. Save the caption to a .txt file
 	err = os.WriteFile(txtPath, []byte(finalCaption), 0644)
 	if err != nil {
 		return fmt.Errorf("failed to write caption file: %w", err)
@@ -201,15 +165,4 @@ func processImage(imagePath string, apiKey string, force bool, identity string) 
 
 	fmt.Printf("Processing %s: ✅ SUCCESS\n", baseName)
 	return nil
-}
-
-// isImageFile checks if a filename has a common image extension
-func isImageFile(filename string) bool {
-	ext := strings.ToLower(filepath.Ext(filename))
-	switch ext {
-	case ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp":
-		return true
-	default:
-		return false
-	}
 }

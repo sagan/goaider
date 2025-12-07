@@ -1,76 +1,21 @@
 package llm
 
 import (
-	"bytes"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
+	"slices"
 	"strings"
-	"time"
 
-	"github.com/invopop/jsonschema"
 	"github.com/sagan/goaider/util"
 )
 
 const (
-	// Gemini API base url
-	GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/"
-
-	// Base backoff for Gemini: set to 6s to respect the default 10 RPM quota
-	GeminiApiBaseBackoff = 6 * time.Second
-	GeminiApiMaxBackoff  = 60 * time.Second
+	OPENROUTER_API_URL             = "https://openrouter.ai/api/v1"
+	OPENROUTER_MODEL_PREFIX        = "openrouter/" // OpenRouter model prefix
+	OPENAI_MODEL_PREFIX            = "gpt-"        // OpenAI model prefix, ignore some uncommon ones like "o3".
+	GEMINI_MODEL_PREFIX            = "gemini-"     // Gemini model prefix
+	OPENAI_COMPATIBLE_MODEL_PREFIX = "openai/"     // Customary OpenAI API compatible model prefix
 )
-
-// 2. API Request Structures (Nested structure for Gemini API)
-type GeminiRequest struct {
-	Contents         []Content         `json:"contents"`
-	GenerationConfig *GenerationConfig `json:"generationConfig"`
-}
-
-type Content struct {
-	Role  string `json:"role"`
-	Parts []Part `json:"parts"`
-}
-
-type InlineData struct {
-	MimeType string `json:"mimeType"`
-	Data     string `json:"data"`
-}
-
-type Part struct {
-	Text       string      `json:"text,omitempty"`
-	InlineData *InlineData `json:"inlineData,omitempty"`
-}
-
-type GenerationConfig struct {
-	ResponseMimeType   string             `json:"responseMimeType"`
-	ResponseJsonSchema *jsonschema.Schema `json:"responseJsonSchema"`
-	Temperature        float64            `json:"temperature"` // Higher = more creative
-}
-
-type GeminiResponse struct {
-	PromptFeedback PromptFeedback `json:"promptFeedback"`
-	Candidates     []Candidate    `json:"candidates"`
-}
-
-type Candidate struct {
-	Content       Content        `json:"content"`
-	FinishReason  string         `json:"finishReason"`
-	Index         int            `json:"index"`
-	SafetyRatings []SafetyRating `json:"safetyRatings"`
-}
-
-type SafetyRating struct {
-	Category    string `json:"category"`
-	Probability string `json:"probability"`
-}
-
-type PromptFeedback struct {
-	BlockReason   string         `json:"blockReason,omitempty"`
-	SafetyRatings []SafetyRating `json:"safetyRatings,omitempty"`
-}
 
 // error returned by online llm service provider
 type ApiError struct {
@@ -98,169 +43,101 @@ func (a *ApiError) Unwrap() error {
 	return a.Err
 }
 
-func Gemini(apiKey string, model string, reqBody *GeminiRequest) (*GeminiResponse, error) {
-	jsonData, err := json.Marshal(reqBody)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
+// Wrapper of openai & gemini
+func ImageToJson[T any](apiKey string, model string, prompt string, imageBytes []byte, mimeType string) (*T, error) {
+	if strings.HasPrefix(model, GEMINI_MODEL_PREFIX) {
+		return GeminiImageToJson[T](apiKey, model, prompt, imageBytes, mimeType)
+	} else if isOpenAiModel(model) {
+		return OpenAIImageToJson[T](OPENAI_API_URL, apiKey, model, prompt, imageBytes, mimeType)
+	} else if openrouterModel, ok := strings.CutPrefix(model, OPENROUTER_MODEL_PREFIX); ok {
+		if !strings.ContainsRune(openrouterModel, '/') {
+			openrouterModel = OPENROUTER_MODEL_PREFIX + openrouterModel
+		}
+		return OpenAIImageToJson[T](OPENROUTER_API_URL, apiKey, openrouterModel, prompt, imageBytes, mimeType)
+	} else if strings.HasPrefix(model, OPENAI_COMPATIBLE_MODEL_PREFIX) { // "openai/model-name/http://localhost:8080/v1"
+		parts := strings.SplitN(model, "/", 3)
+		if len(parts) == 3 {
+			return OpenAIImageToJson[T](parts[2], apiKey, parts[1], prompt, imageBytes, mimeType)
+		}
+		return nil, fmt.Errorf("invalid openai model %s", model)
 	}
-
-	url := fmt.Sprintf("%s%s:generateContent?key=%s", GEMINI_API_URL, model, apiKey)
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return nil, &ApiError{Status: resp.StatusCode, Body: string(bodyBytes)}
-	}
-
-	var apiResp *GeminiResponse
-	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
-		return nil, &ApiError{Message: "failed to decode response", Err: err, Retryable: true}
-	}
-
-	if apiResp.PromptFeedback.BlockReason != "" {
-		return nil, &ApiError{Message: fmt.Sprintf("blocked: %s", apiResp.PromptFeedback.BlockReason)}
-	}
-
-	if len(apiResp.Candidates) == 0 || len(apiResp.Candidates[0].Content.Parts) == 0 {
-		return nil, &ApiError{Message: "no contents returned by Gemini", Retryable: true}
-	}
-	return apiResp, nil
+	return nil, fmt.Errorf("unsupported model %s", model)
 }
 
-// GeminiJsonResponse calls the Gemini API with a prompt and expects a JSON response
-// that conforms to the schema of type T.
-// It returns a pointer to the unmarshalled JSON object of type T.
-// T must be a struct type.
-func GeminiJsonResponse[T any](apiKey string, model string, promptText string) (*T, error) {
-	schema := jsonschema.Reflect(new(T))
-	reqBody := &GeminiRequest{
-		Contents: []Content{{Parts: []Part{{Text: promptText}}}},
-		GenerationConfig: &GenerationConfig{
-			ResponseMimeType:   "application/json",
-			ResponseJsonSchema: schema,
-			Temperature:        1.0, // Higher: more creativity
-		},
+func ImageToText(apiKey string, model string, prompt string, imageBytes []byte, mimeType string) (string, error) {
+	if strings.HasPrefix(model, GEMINI_API_URL) {
+		return GeminiImageToText(apiKey, model, prompt, imageBytes, mimeType)
+	} else if isOpenAiModel(model) {
+		return OpenAIImageToText(OPENAI_API_URL, apiKey, model, prompt, imageBytes, mimeType)
+	} else if openrouterModel, ok := strings.CutPrefix(model, OPENROUTER_MODEL_PREFIX); ok {
+		if !strings.ContainsRune(openrouterModel, '/') {
+			openrouterModel = OPENROUTER_MODEL_PREFIX + openrouterModel
+		}
+		return OpenAIImageToText(OPENROUTER_API_URL, apiKey, openrouterModel, prompt, imageBytes, mimeType)
+	} else if strings.HasPrefix(model, OPENAI_COMPATIBLE_MODEL_PREFIX) {
+		parts := strings.SplitN(model, "/", 3)
+		if len(parts) == 3 {
+			return OpenAIImageToText(parts[2], apiKey, parts[1], prompt, imageBytes, mimeType)
+		}
+		return "", fmt.Errorf("invalid openai model %s", model)
 	}
-
-	apiResp, err := Gemini(apiKey, model, reqBody)
-	if err != nil {
-		return nil, err
-	}
-
-	// The actual JSON data is a string *inside* the Text field
-	rawJsonString := apiResp.Candidates[0].Content.Parts[0].Text
-
-	result := new(T)
-	if err := json.Unmarshal([]byte(rawJsonString), &result); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal internal JSON: %w", err)
-	}
-
-	return result, nil
+	return "", fmt.Errorf("unsupported model %s", model)
 }
 
-// Simplest one-shot chat
-func GeminiChat(apiKey string, model string, promptText string) (string, error) {
-	reqBody := &GeminiRequest{
-		Contents: []Content{{Parts: []Part{{Text: promptText}}}},
+func ChatJsonResponse[T any](apiKey string, model string, prompt string) (*T, error) {
+	if strings.HasPrefix(model, GEMINI_MODEL_PREFIX) {
+		return GeminiJsonResponse[T](apiKey, model, prompt)
+	} else if isOpenAiModel(model) {
+		return OpenAIJsonResponse[T](OPENAI_API_URL, apiKey, model, prompt)
+	} else if openrouterModel, ok := strings.CutPrefix(model, OPENROUTER_MODEL_PREFIX); ok {
+		if !strings.ContainsRune(openrouterModel, '/') {
+			openrouterModel = OPENROUTER_MODEL_PREFIX + openrouterModel
+		}
+		return OpenAIJsonResponse[T](OPENROUTER_API_URL, apiKey, openrouterModel, prompt)
+	} else if strings.HasPrefix(model, OPENAI_COMPATIBLE_MODEL_PREFIX) {
+		parts := strings.SplitN(model, "/", 3)
+		if len(parts) == 3 {
+			return OpenAIJsonResponse[T](parts[2], apiKey, parts[1], prompt)
+		}
+		return nil, fmt.Errorf("invalid openai model %s", model)
 	}
-	apiResp, err := Gemini(apiKey, model, reqBody)
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(apiResp.Candidates[0].Content.Parts[0].Text), nil
+	return nil, fmt.Errorf("unsupported model %s", model)
 }
 
-// GeminiImageToText sends an image and a text prompt to Gemini and returns the text response.
-// supported mimeTypes: "image/png", "image/jpeg", "image/webp", "image/heic", "image/heif"
-func GeminiImageToText(apiKey string, model string, promptText string,
-	imageBytes []byte, mimeType string) (string, error) {
-	// 1. Encode image to Base64
-	b64Data := base64.StdEncoding.EncodeToString(imageBytes)
-
-	// 2. Construct Request
-	reqBody := &GeminiRequest{
-		Contents: []Content{
-			{
-				Role: "user",
-				Parts: []Part{
-					{Text: promptText},
-					{
-						InlineData: &InlineData{
-							MimeType: mimeType,
-							Data:     b64Data,
-						},
-					},
-				},
-			},
-		},
-		GenerationConfig: &GenerationConfig{
-			Temperature: 0.4, // Lower temperature for more descriptive/accurate results
-		},
+func Chat(apiKey string, model string, prompt string) (string, error) {
+	if strings.HasPrefix(model, GEMINI_MODEL_PREFIX) {
+		return GeminiChat(apiKey, model, prompt)
+	} else if isOpenAiModel(model) {
+		return OpenAIChat(OPENAI_API_URL, apiKey, model, prompt)
+	} else if openrouterModel, ok := strings.CutPrefix(model, OPENROUTER_MODEL_PREFIX); ok {
+		if !strings.ContainsRune(openrouterModel, '/') {
+			openrouterModel = OPENROUTER_MODEL_PREFIX + openrouterModel
+		}
+		return OpenAIChat(OPENROUTER_API_URL, apiKey, openrouterModel, prompt)
+	} else if strings.HasPrefix(model, OPENAI_COMPATIBLE_MODEL_PREFIX) {
+		parts := strings.SplitN(model, "/", 3)
+		if len(parts) == 3 {
+			return OpenAIChat(parts[2], apiKey, parts[1], prompt)
+		}
+		return "", fmt.Errorf("invalid openai model %s", model)
 	}
-
-	// 3. Call API
-	apiResp, err := Gemini(apiKey, model, reqBody)
-	if err != nil {
-		return "", err
-	}
-
-	return strings.TrimSpace(apiResp.Candidates[0].Content.Parts[0].Text), nil
+	return "", fmt.Errorf("unsupported model %s", model)
 }
 
-// GeminiImageToJson sends an image and a text prompt to Gemini and enforces a JSON response
-// that conforms to the schema of type T.
-func GeminiImageToJson[T any](apiKey string, model string, promptText string, imageBytes []byte, mimeType string) (*T, error) {
-	// 1. Generate Schema
-	schema := jsonschema.Reflect(new(T))
+// From https://platform.openai.com/docs/pricing
+var openaiModels = []string{
+	"codex-mini-latest",
+	"computer-use-preview",
+	"o1",
+	"o3",
+}
+var openaiModelPrefixes = []string{
+	"o1-",
+	"o3-",
+	"o4-",
+}
 
-	// 2. Encode Image
-	b64Data := base64.StdEncoding.EncodeToString(imageBytes)
-
-	// 3. Construct Request with Image AND Schema
-	reqBody := &GeminiRequest{
-		Contents: []Content{
-			{
-				Role: "user",
-				Parts: []Part{
-					{Text: promptText},
-					{
-						InlineData: &InlineData{
-							MimeType: mimeType,
-							Data:     b64Data,
-						},
-					},
-				},
-			},
-		},
-		GenerationConfig: &GenerationConfig{
-			ResponseMimeType:   "application/json",
-			ResponseJsonSchema: schema,
-			Temperature:        0.4,
-		},
-	}
-
-	// 4. Call API
-	apiResp, err := Gemini(apiKey, model, reqBody)
-	if err != nil {
-		return nil, err
-	}
-
-	// 5. Parse JSON
-	rawJsonString := apiResp.Candidates[0].Content.Parts[0].Text
-	result := new(T)
-	if err := json.Unmarshal([]byte(rawJsonString), &result); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal internal JSON: %w", err)
-	}
-
-	return result, nil
+func isOpenAiModel(model string) bool {
+	return strings.HasPrefix(model, OPENAI_MODEL_PREFIX) || slices.Contains(openaiModels, model) ||
+		slices.ContainsFunc(openaiModelPrefixes, func(prefix string) bool { return strings.HasPrefix(model, prefix) })
 }

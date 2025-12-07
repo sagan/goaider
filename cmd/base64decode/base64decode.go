@@ -16,6 +16,7 @@ import (
 
 	"github.com/sagan/goaider/cmd"
 	"github.com/sagan/goaider/util"
+	"github.com/sagan/goaider/util/stringutil"
 )
 
 var base64decodeCmd = &cobra.Command{
@@ -48,23 +49,26 @@ func doBase64decode(cmd *cobra.Command, args []string) (err error) {
 		}
 	}
 
-	var inputReader io.Reader
+	var input io.Reader
 	if flagInput != "" {
 		if flagInput == "-" {
-			inputReader = os.Stdin
+			input = os.Stdin
 		} else {
-			inputReader, err = os.Open(flagInput)
+			f, err := os.Open(flagInput)
 			if err != nil {
 				return fmt.Errorf("failed to open input file %q: %w", flagInput, err)
 			}
+			defer f.Close()
+			input = f
 		}
 	} else if len(args) > 0 {
-		inputReader = strings.NewReader(args[0])
+		input = strings.NewReader(args[0])
 	} else {
 		return fmt.Errorf("no input provided. Use 'base64decode [string]' or 'base64decode -i <file>'")
 	}
+	input = stringutil.GetTextReader(input)
 
-	inputBytes, err := io.ReadAll(inputReader)
+	inputBytes, err := io.ReadAll(input)
 	if err != nil {
 		return fmt.Errorf("failed to read input: %w", err)
 	}
