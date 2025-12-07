@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
+	"runtime"
 	"strings"
 	"text/template"
 
@@ -157,6 +159,9 @@ func doTranslate(cmd *cobra.Command, args []string) (err error) {
 		}, shellCompleter, prompt.OptionLivePrefix(func() (prefix string, useLivePrefix bool) {
 			return fmt.Sprintf("(%s) > ", flagTargetLang), true
 		}), prompt.OptionTitle("goaider-translate"))
+		if runtime.GOOS != "windows" {
+			defer exec.Command("reset").Run()
+		}
 		p.Run()
 		return nil
 	}

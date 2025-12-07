@@ -4,6 +4,7 @@ import (
 	_ "github.com/sagan/goaider/cmd/base64decode"
 	_ "github.com/sagan/goaider/cmd/base64encode"
 	_ "github.com/sagan/goaider/cmd/caption"
+	_ "github.com/sagan/goaider/cmd/chat"
 	_ "github.com/sagan/goaider/cmd/comfyui/all"
 	_ "github.com/sagan/goaider/cmd/copy"
 	_ "github.com/sagan/goaider/cmd/crop"

@@ -18,6 +18,8 @@ import (
 const (
 	// Gemini API base url
 	GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/"
+	// https://ai.google.dev/gemini-api/docs/openai
+	GEMINI_OPENAI_COMPATIBLE_API_URL = "https://generativelanguage.googleapis.com/v1beta/openai/v1"
 
 	// Base backoff for Gemini: set to 6s to respect the default 10 RPM quota
 	GeminiApiBaseBackoff = 6 * time.Second

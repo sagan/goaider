@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/sagan/goaider/cmd"
+	"github.com/sagan/goaider/config"
 	"github.com/sagan/goaider/constants"
 	"github.com/sagan/goaider/features/llm"
 	"github.com/sagan/goaider/util"
@@ -62,12 +63,14 @@ func init() {
 		"Optional: Force re-generation of all captions, even if .txt files exist")
 	captionCmd.Flags().StringVarP(&flagIdentity, "identity", "", "",
 		"Optional: The trigger word (e.g., 'foobar' or 'photo of foobar') to prepend to each caption")
-	captionCmd.Flags().StringVarP(&flagModel, "model", "", constants.DEFAULT_MODEL,
-		"The model to use for captioning. "+constants.HELP_MODEL)
+	captionCmd.Flags().StringVarP(&flagModel, "model", "", "", "The model to use. "+constants.HELP_MODEL)
 	captionCmd.Flags().StringVarP(&flagModelKey, "model-key", "", "", constants.HELP_MODEL_KEY)
 }
 
 func caption(cmd *cobra.Command, args []string) error {
+	if flagModel == "" {
+		flagModel = config.GetDefaultModel()
+	}
 	argDir := args[0]
 
 	files, err := os.ReadDir(argDir)

@@ -6,7 +6,8 @@
 
 使用 `goaider <command> -h` 查看各个命令的帮助。部分命令需要通过环境变量(例如 GEMINI_API_KEY 等)配置外部 API 的认证信息。
 
-- `goaider caption` : 使用 LLM 生成目录里所有图片文件的 caption 文件 (.txt)。用于图片模型 LoRa 微调准备数据集。支持 Gemini, OpenAI, OpenRouter, 任意 OpenAI API 兼容的 LLM。
+- `goaider chat` : 和 LLM 聊天。支持输入文件作为 prompt。支持 interactive shell 模式。支持 Gemini, OpenAI, OpenRouter, 任意 OpenAI API 兼容的 LLM。
+- `goaider caption` : 使用 LLM 生成目录里所有图片文件的 caption 文件 (.txt)。用于图片模型 LoRa 微调准备数据集。
 - `goaider copy` : 复制 stdin 到剪贴板。仅支持 Windows。
 - `goaider crop` : 自动裁剪并缩放目录里所有图片到 1024x1024 像素。用于图片模型 LoRa 微调准备数据集。
 - `goaider csv` : CSV 文件常用的各种操作，包括 uniq (去重)、sort (排序)、join (关联查询)、query (使用 SQL 查询 CSV)、exec (对 CSV 里的每一行执行一个指定命令行)等。

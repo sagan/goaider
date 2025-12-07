@@ -19,6 +19,7 @@ import (
 
 	"github.com/sagan/goaider/cmd/comfyui"
 	"github.com/sagan/goaider/cmd/comfyui/api"
+	"github.com/sagan/goaider/config"
 	"github.com/sagan/goaider/constants"
 	"github.com/sagan/goaider/features/llm"
 	"github.com/sagan/goaider/util"
@@ -81,8 +82,7 @@ func init() {
 		"ComfyUI server address(es)")
 	batchI2VCmd.Flags().StringArrayVarP(&flagVars, "var", "v", nil,
 		`Set variables. Use "%image%" for input image, "%prompt%" for LLM text, "%rand%" for random seed.`)
-	batchI2VCmd.Flags().StringVarP(&flagModel, "model", "", constants.DEFAULT_MODEL,
-		"The Model to use. "+constants.HELP_MODEL)
+	batchI2VCmd.Flags().StringVarP(&flagModel, "model", "", "", "The model to use. "+constants.HELP_MODEL)
 	batchI2VCmd.Flags().StringVarP(&flagModelKey, "model-key", "", "", constants.HELP_MODEL_KEY)
 	batchI2VCmd.Flags().BoolVarP(&flagNoPrompt, "no-prompt", "", false, "Skip LLM prompt generation")
 	batchI2VCmd.Flags().StringVarP(&flagPromptTmpl, "prompt-template", "", DEFAULT_PROMPT,
@@ -131,10 +131,12 @@ func (p *ProgressTracker) GetResumeString() string {
 }
 
 func doBatchI2V(cmd *cobra.Command, args []string) error {
-	// 1. Setup Context with Signal Cancellation
+	if flagModel == "" {
+		flagModel = config.GetDefaultModel()
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
 	// Handle Ctrl+C to print resume string
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)

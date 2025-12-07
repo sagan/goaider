@@ -12,6 +12,7 @@ import (
 
 	"github.com/sagan/goaider/cmd/comfyui"
 	"github.com/sagan/goaider/cmd/comfyui/api"
+	"github.com/sagan/goaider/config"
 	"github.com/sagan/goaider/constants"
 	"github.com/sagan/goaider/features/csvfeature"
 	"github.com/sagan/goaider/features/llm"
@@ -42,13 +43,15 @@ var (
 func init() {
 	genCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Force overwriting without confirmation")
 	genCmd.Flags().StringVarP(&flatOutput, "output", "o", ".", `Output dir`)
-	genCmd.Flags().StringVarP(&flagModel, "model", "", constants.DEFAULT_MODEL,
-		"The model to use. "+constants.HELP_MODEL)
+	genCmd.Flags().StringVarP(&flagModel, "model", "", "", "The model to use. "+constants.HELP_MODEL)
 	genCmd.Flags().StringVarP(&flagModelKey, "model-key", "", "", constants.HELP_MODEL_KEY)
 	comfyui.ComfyuiCmd.AddCommand(genCmd)
 }
 
 func doGen(cmd *cobra.Command, args []string) (err error) {
+	if flagModel == "" {
+		flagModel = config.GetDefaultModel()
+	}
 	actionsFile := filepath.Join(flatOutput, ACTIONS_FILE)
 	contextsFile := filepath.Join(flatOutput, CONTEXTS_FILE)
 	if exists, err := util.FileExists(actionsFile); err != nil || (exists && !flagForce) {

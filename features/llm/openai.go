@@ -1,6 +1,7 @@
 package llm
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
@@ -11,6 +12,8 @@ import (
 	"strings"
 
 	"github.com/invopop/jsonschema"
+	"github.com/vincent-petithory/dataurl"
+
 	"github.com/sagan/goaider/constants"
 )
 
@@ -25,7 +28,7 @@ const (
 
 type OpenAIChatRequest struct {
 	Model          string                `json:"model"`
-	Messages       []OpenAIMessage       `json:"messages"`
+	Messages       []*OpenAIMessage      `json:"messages"`
 	Temperature    float64               `json:"temperature"`
 	ResponseFormat *OpenAIResponseFormat `json:"response_format,omitempty"`
 	Stream         bool                  `json:"stream,omitempty"`
@@ -37,7 +40,7 @@ type OpenAIMessage struct {
 }
 
 type OpenAIContentPart struct {
-	Type     string          `json:"type"`
+	Type     string          `json:"type"` // text, image_url
 	Text     string          `json:"text,omitempty"`
 	ImageUrl *OpenAIImageUrl `json:"image_url,omitempty"`
 }
@@ -77,23 +80,56 @@ type OpenAIError struct {
 	Code    any    `json:"code"`
 }
 
-// CallOpenAI is the base function for OpenAI compatible APIs.
-// baseUrl: e.g., "https://api.openai.com/v1" or "http://localhost:11434/v1"
-func CallOpenAI(baseUrl string, apiKey string, reqBody *OpenAIChatRequest) (*OpenAIResponse, error) {
-	if apiKey == "" && (baseUrl == OPENAI_API_URL || baseUrl == OPENROUTER_API_URL) {
-		switch baseUrl {
-		case OPENAI_API_URL:
-			apiKey = os.Getenv(constants.ENV_OPENAI_API_KEY)
-			if apiKey == "" {
-				return nil, fmt.Errorf("OpenAI api key or %s env not set", constants.ENV_OPENAI_API_KEY)
-			}
-		case OPENROUTER_API_URL:
-			apiKey = os.Getenv(constants.ENV_OPENROUTER_API_KEY)
-			if apiKey == "" {
-				return nil, fmt.Errorf("OpenRouter api key or %s env not set", constants.ENV_OPENROUTER_API_KEY)
-			}
+// =================================================================================
+// Streaming Specific Structures
+// =================================================================================
+type OpenAIStreamChunk struct {
+	ID      string               `json:"id"`
+	Choices []OpenAIStreamChoice `json:"choices"`
+}
+
+type OpenAIStreamChoice struct {
+	Index        int         `json:"index"`
+	Delta        OpenAIDelta `json:"delta"`
+	FinishReason string      `json:"finish_reason"`
+}
+
+type OpenAIDelta struct {
+	Role    string `json:"role,omitempty"`
+	Content string `json:"content,omitempty"`
+}
+
+func getOpenAIApiKeyFromEnv(baseUrl string) (apiKey string, err error) {
+	switch baseUrl {
+	case OPENAI_API_URL:
+		apiKey = os.Getenv(constants.ENV_OPENAI_API_KEY)
+		if apiKey == "" {
+			err = fmt.Errorf("OpenAI api key or %s env not set", constants.ENV_OPENAI_API_KEY)
+		}
+	case OPENROUTER_API_URL:
+		apiKey = os.Getenv(constants.ENV_OPENROUTER_API_KEY)
+		if apiKey == "" {
+			err = fmt.Errorf("OpenRouter api key or %s env not set", constants.ENV_OPENROUTER_API_KEY)
+		}
+	case GEMINI_OPENAI_COMPATIBLE_API_URL:
+		apiKey = os.Getenv(constants.ENV_GEMINI_API_KEY)
+		if apiKey == "" {
+			err = fmt.Errorf("Gemini api key or %s env not set", constants.ENV_GEMINI_API_KEY)
 		}
 	}
+	return apiKey, err
+}
+
+// CallOpenAI is the base function for OpenAI compatible APIs.
+// baseUrl: e.g., "https://api.openai.com/v1" or "http://localhost:11434/v1"
+func CallOpenAI(baseUrl string, apiKey string, reqBody *OpenAIChatRequest) (apiResp *OpenAIResponse, err error) {
+	if apiKey == "" {
+		apiKey, err = getOpenAIApiKeyFromEnv(baseUrl)
+		if err != nil {
+			return nil, err
+		}
+	}
+	reqBody.Stream = false
 
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
@@ -134,7 +170,6 @@ func CallOpenAI(baseUrl string, apiKey string, reqBody *OpenAIChatRequest) (*Ope
 		}
 	}
 
-	var apiResp OpenAIResponse
 	if err := json.Unmarshal(bodyBytes, &apiResp); err != nil {
 		return nil, &ApiError{Message: "failed to decode response", Err: err, Retryable: true}
 	}
@@ -148,14 +183,106 @@ func CallOpenAI(baseUrl string, apiKey string, reqBody *OpenAIChatRequest) (*Ope
 		return nil, &ApiError{Message: "no choices returned by API", Retryable: true}
 	}
 
-	return &apiResp, nil
+	return apiResp, nil
+}
+
+// CallOpenAIStream handles streaming responses (SSE).
+// onChunk: A callback function invoked for every text token received.
+// Return an error from onChunk to stop streaming immediately.
+func CallOpenAIStream(baseUrl, apiKey string, reqBody *OpenAIChatRequest,
+	onChunk func(content string) error) (err error) {
+	if apiKey == "" {
+		apiKey, err = getOpenAIApiKeyFromEnv(baseUrl)
+		if err != nil {
+			return err
+		}
+	}
+	// Force stream to true
+	reqBody.Stream = true
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	baseUrl = strings.TrimRight(baseUrl, "/")
+	url := fmt.Sprintf("%s/chat/completions", baseUrl)
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", apiKey))
+	req.Header.Set("Accept", "text/event-stream") // Standard for SSE
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	// Handle non-200 errors (API errors usually come as JSON, but not streamed)
+	if resp.StatusCode != 200 {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return &ApiError{
+			Status:    resp.StatusCode,
+			Body:      string(bodyBytes),
+			Message:   fmt.Sprintf("OpenAI API returned status %d", resp.StatusCode),
+			Retryable: resp.StatusCode == 429 || resp.StatusCode >= 500,
+		}
+	}
+
+	// Read the stream line by line
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		// SSE lines start with "data: "
+		// Sometimes we get empty lines (keep-alives), ignore them
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+
+		dataStr := strings.TrimPrefix(line, "data: ")
+		dataStr = strings.TrimSpace(dataStr)
+
+		// Check for the [DONE] sentinel
+		if dataStr == "[DONE]" {
+			break
+		}
+
+		var chunk OpenAIStreamChunk
+		if err := json.Unmarshal([]byte(dataStr), &chunk); err != nil {
+			// If we can't unmarshal a specific chunk, we might log it but continue,
+			// or fail. Here we fail to ensure integrity.
+			return fmt.Errorf("failed to unmarshal stream chunk: %w", err)
+		}
+
+		if len(chunk.Choices) > 0 {
+			content := chunk.Choices[0].Delta.Content
+			// Only trigger callback if there is actual content
+			if content != "" {
+				if err := onChunk(content); err != nil {
+					return err // User requested to stop
+				}
+			}
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("error reading stream: %w", err)
+	}
+
+	return nil
 }
 
 // OpenAIChat performs a simple text-in, text-out conversation.
 func OpenAIChat(baseUrl string, apiKey string, model string, promptText string) (string, error) {
 	reqBody := &OpenAIChatRequest{
 		Model:       model,
-		Messages:    []OpenAIMessage{{Role: "user", Content: promptText}},
+		Messages:    []*OpenAIMessage{{Role: "user", Content: promptText}},
 		Temperature: 0.7,
 	}
 
@@ -185,7 +312,7 @@ func OpenAIJsonResponse[T any](baseUrl string, apiKey string, model string, prom
 	// OpenAI requires strict schema adherence
 	reqBody := &OpenAIChatRequest{
 		Model:       model,
-		Messages:    []OpenAIMessage{{Role: "user", Content: promptText}},
+		Messages:    []*OpenAIMessage{{Role: "user", Content: promptText}},
 		Temperature: 0.2, // Lower temp for structured data
 		ResponseFormat: &OpenAIResponseFormat{
 			Type: "json_schema",
@@ -218,18 +345,15 @@ func OpenAIJsonResponse[T any](baseUrl string, apiKey string, model string, prom
 // OpenAIImageToText handles Vision capabilities.
 func OpenAIImageToText(apiKey string, baseUrl string, model string, promptText string,
 	imageBytes []byte, mimeType string) (string, error) {
-	b64Data := base64.StdEncoding.EncodeToString(imageBytes)
-	dataUrl := fmt.Sprintf("data:%s;base64,%s", mimeType, b64Data)
-
 	// Construct multimodal message
 	contentParts := []OpenAIContentPart{
 		{Type: "text", Text: promptText},
-		{Type: "image_url", ImageUrl: &OpenAIImageUrl{Url: dataUrl}},
+		{Type: "image_url", ImageUrl: &OpenAIImageUrl{Url: dataurl.EncodeBytes(imageBytes)}},
 	}
 
 	reqBody := &OpenAIChatRequest{
 		Model:       model,
-		Messages:    []OpenAIMessage{{Role: "user", Content: contentParts}},
+		Messages:    []*OpenAIMessage{{Role: "user", Content: contentParts}},
 		Temperature: 0.4,
 	}
 
@@ -260,7 +384,7 @@ func OpenAIImageToJson[T any](baseUrl string, apiKey string, model string, promp
 
 	reqBody := &OpenAIChatRequest{
 		Model:       model,
-		Messages:    []OpenAIMessage{{Role: "user", Content: contentParts}},
+		Messages:    []*OpenAIMessage{{Role: "user", Content: contentParts}},
 		Temperature: 0.4,
 		ResponseFormat: &OpenAIResponseFormat{
 			Type: "json_schema",

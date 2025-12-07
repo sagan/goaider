@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/sagan/goaider/cmd"
+	"github.com/sagan/goaider/config"
 	"github.com/sagan/goaider/constants"
 	"github.com/sagan/goaider/features/llm"
 	"github.com/sagan/goaider/util"
@@ -30,7 +31,7 @@ var sttCmd = &cobra.Command{
 	Short: "Generates speech-to-text transcripts for audio files",
 	Long: `Generates speech-to-text transcripts for audio files.
 
-Processes a directory of audio files (.wav, .mp3, .m4a, .flac, .ogg),
+It uses LLM to process a directory of audio files (.wav, .mp3, .m4a, .flac, .ogg),
 and generates a corresponding .txt file for each one using the Google Gemini API.
 
 Implements exponential backoff to handle rate limiting (e.g., 10 RPM).
@@ -43,13 +44,18 @@ Requires the GEMINI_API_KEY environment variable to be set.`,
 func init() {
 	cmd.RootCmd.AddCommand(sttCmd)
 	sttCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Overwrite existing .txt transcript files")
-	sttCmd.Flags().StringVarP(&flagModel, "model", "", constants.DEFAULT_MODEL,
-		"The model to use for transcription. "+constants.HELP_MODEL)
+	sttCmd.Flags().StringVarP(&flagModel, "model", "", "", "The model to use. "+constants.HELP_MODEL)
 	sttCmd.Flags().StringVarP(&flagModelKey, "model-key", "", "", constants.HELP_MODEL_KEY)
 }
 
 func stt(cmd *cobra.Command, args []string) error {
+	if flagModel == "" {
+		flagModel = config.GetDefaultModel()
+	}
 	argDir := args[0]
+	if !strings.HasPrefix(flagModel, llm.GEMINI_MODEL_PREFIX) {
+		return fmt.Errorf("only Gemini model can be used")
+	}
 	log.Printf("Using model: %s", flagModel)
 
 	// Read all files in the directory

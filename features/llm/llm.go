@@ -124,6 +124,32 @@ func Chat(apiKey string, model string, prompt string) (string, error) {
 	return "", fmt.Errorf("unsupported model %s", model)
 }
 
+func Stream(apiKey string, model string, reqBody *OpenAIChatRequest, onChunk func(content string) error) error {
+	apiEndpoint := ""
+	if strings.HasPrefix(model, GEMINI_MODEL_PREFIX) {
+		apiEndpoint = GEMINI_OPENAI_COMPATIBLE_API_URL
+	} else if isOpenAiModel(model) {
+		apiEndpoint = OPENAI_API_URL
+	} else if openrouterModel, ok := strings.CutPrefix(model, OPENROUTER_MODEL_PREFIX); ok {
+		if !strings.ContainsRune(openrouterModel, '/') {
+			openrouterModel = OPENROUTER_MODEL_PREFIX + openrouterModel
+		}
+		model = openrouterModel
+		apiEndpoint = OPENROUTER_API_URL
+	} else if strings.HasPrefix(model, OPENAI_COMPATIBLE_MODEL_PREFIX) {
+		parts := strings.SplitN(model, "/", 3)
+		if len(parts) != 3 {
+			return fmt.Errorf("invalid openai model %s", model)
+		}
+		apiEndpoint = parts[2]
+		model = parts[1]
+	} else {
+		return fmt.Errorf("unsupported model %s", model)
+	}
+	reqBody.Model = model
+	return CallOpenAIStream(apiEndpoint, apiKey, reqBody, onChunk)
+}
+
 // From https://platform.openai.com/docs/pricing
 var openaiModels = []string{
 	"codex-mini-latest",
