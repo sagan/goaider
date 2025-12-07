@@ -11,6 +11,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/mattn/go-runewidth"
+	unicodeEncoding "golang.org/x/text/encoding/unicode"
+	"golang.org/x/text/transform"
 )
 
 // 0xEF, 0xBB, 0xBF
@@ -147,4 +149,50 @@ func SplitLines(str string) (lines []string) {
 		panic(err) // don't expect an error
 	}
 	return lines
+}
+
+// GetTextReader takes a raw input reader (potentially with BOMs and different line endings)
+// and returns a Reader that outputs clean UTF-8 with \n line breaks.
+func GetTextReader(input io.Reader) io.Reader {
+	// 1. Define the encoding detection strategy.
+	// unicode.BOMOverride looks for a BOM at the start.
+	// - If found (UTF-16LE, UTF-16BE, or UTF-8 BOM), it uses that encoding.
+	// - If not found, it falls back to the provided encoding (UTF-8).
+	encoding := unicodeEncoding.BOMOverride(unicodeEncoding.UTF8.NewDecoder())
+
+	// 2. Create a generic decoding reader.
+	// This converts the raw bytes -> UTF-8 bytes.
+	decodedReader := transform.NewReader(input, encoding)
+
+	// 3. Normalize line endings.
+	// We wrap the decoded reader in a custom reader that strips '\r'.
+	// Since we are now guaranteed UTF-8, and the input is either \n or \r\n,
+	// simply removing \r converts \r\n -> \n safely.
+	return &crlfNormalizer{r: decodedReader}
+}
+
+// crlfNormalizer is a custom io.Reader that removes carriage returns (\r).
+type crlfNormalizer struct {
+	r io.Reader
+}
+
+func (c *crlfNormalizer) Read(p []byte) (n int, err error) {
+	// Read from the underlying reader
+	n, err = c.r.Read(p)
+
+	// If we read data, filter it in-place
+	if n > 0 {
+		// Use two pointers to compact the buffer
+		j := 0
+		for i := 0; i < n; i++ {
+			b := p[i]
+			if b != '\r' {
+				p[j] = b
+				j++
+			}
+		}
+		// Update the number of bytes read to the new (shorter) length
+		n = j
+	}
+	return n, err
 }

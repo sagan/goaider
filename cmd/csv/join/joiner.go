@@ -4,7 +4,6 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
-	"os"
 )
 
 // A container for pre-processed CSV data, used internally.
@@ -24,21 +23,15 @@ type rightRow struct {
 
 // readCsv reads a CSV file, finds the join column index, and applies a prefix to headers.
 // If noHeader is true, headers are generated as "c1", "c2"... and all rows are treated as data.
-func readCsv(filePath, joinKey, prefix string, noHeader bool) (*csvContent, error) {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("could not open file %s: %w", filePath, err)
-	}
-	defer file.Close()
-
+func readCsv(file io.Reader, joinKey, prefix string, noHeader bool) (*csvContent, error) {
 	reader := csv.NewReader(file)
 	allRecords, err := reader.ReadAll()
 	if err != nil {
-		return nil, fmt.Errorf("could not read CSV data from %s: %w", filePath, err)
+		return nil, fmt.Errorf("could not read CSV data from : %w", err)
 	}
 
 	if len(allRecords) == 0 {
-		return nil, fmt.Errorf("file %s is empty", filePath)
+		return nil, fmt.Errorf("input is empty")
 	}
 
 	var header []string
@@ -79,7 +72,7 @@ func readCsv(filePath, joinKey, prefix string, noHeader bool) (*csvContent, erro
 	}
 
 	if content.joinIdx == -1 {
-		return nil, fmt.Errorf("join key column '%s' not found in header of %s (headers: %v)", joinKey, filePath, content.header)
+		return nil, fmt.Errorf("join key column '%s' not found in header (headers: %v)", joinKey, content.header)
 	}
 
 	// Apply prefix to all headers
@@ -102,7 +95,7 @@ func readCsv(filePath, joinKey, prefix string, noHeader bool) (*csvContent, erro
 // If allJoin is true, do a "full join" instead of "left join": include all rows of both csv in output,
 // if all right csv column names are "masked" by left csv, return an error instead.
 // If noHeader is true, input files are treated as having no header row; columns are named c1, c2, c3...
-func joinCsvFiles(leftCsvFile, rightCsvFile string, output io.Writer,
+func joinCsvFiles(leftCsvFile, rightCsvFile io.Reader, output io.Writer,
 	leftOn, rightOn, leftPrefix, rightPrefix string, allJoin, noHeader bool) (err error) {
 
 	if leftOn == "" || rightOn == "" {

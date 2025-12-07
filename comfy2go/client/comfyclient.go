@@ -3,6 +3,7 @@ package client
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -33,6 +34,7 @@ type ComfyClientCallbacks struct {
 
 // ComfyClient is the top level object that allows for interaction with the ComfyUI backend
 type ComfyClient struct {
+	Origin                string // Server origin. E.g. "http://127.0.0.1:8188" (without trailing /) @mod
 	serverScheme          string
 	serverBaseAddress     string
 	serverHost            string
@@ -56,9 +58,15 @@ func NewComfyClientWithTimeout(server_scheme string, server_host string, server_
 	if server_scheme == "https" {
 		wsScheme = "wss"
 	}
-
+	origin := ""
+	if server_scheme == "http" && server_port == 80 || server_scheme == "https" && server_port == 443 {
+		origin = fmt.Sprintf("%s://%s", server_scheme, server_host)
+	} else {
+		origin = fmt.Sprintf("%s://%s:%d", server_scheme, server_host, server_port)
+	}
 	cid := uuid.New().String()
 	retv := &ComfyClient{
+		Origin:            origin,
 		serverScheme:      server_scheme,
 		serverBaseAddress: sbaseaddr,
 		serverHost:        server_host,
@@ -92,8 +100,15 @@ func NewComfyClient(server_scheme string, server_host string, server_port int, c
 	if server_scheme == "https" {
 		wsScheme = "wss"
 	}
+	origin := ""
+	if server_scheme == "http" && server_port == 80 || server_scheme == "https" && server_port == 443 {
+		origin = fmt.Sprintf("%s://%s", server_scheme, server_host)
+	} else {
+		origin = fmt.Sprintf("%s://%s:%d", server_scheme, server_host, server_port)
+	}
 	cid := uuid.New().String()
 	retv := &ComfyClient{
+		Origin:            origin,
 		serverScheme:      server_scheme,
 		serverBaseAddress: sbaseaddr,
 		serverHost:        server_host,

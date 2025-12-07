@@ -22,7 +22,7 @@ var (
 
 // Parse an TensorBoard event file
 var sttCmd = &cobra.Command{
-	Use:     "parsetfef <filename>",
+	Use:     "parsetfef {filename}",
 	Aliases: []string{"parsetfevents"},
 	Short:   "Parse TensorFlow event file",
 	Long: `Parse TensorFlow event file.

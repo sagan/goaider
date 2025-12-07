@@ -4,9 +4,12 @@ package constants
 const ENV_GEMINI_API_KEY = "GEMINI_API_KEY"
 
 // Default gemini model
-const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite"
 
 const NONE = "none"
+
+const HELP_MODEL = `Gemini models (from cheapest to most expensive): ` +
+	`"gemini-2.0-flash-lite", "gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.5-pro`
 
 const HELP_TEMPLATE_FLAG = `The Go text template string. If the value starts with "@", ` +
 	`it (the rest part after @) is treated as a filename, ` +

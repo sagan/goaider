@@ -25,7 +25,7 @@ var (
 )
 
 var genlistCmd = &cobra.Command{
-	Use:   "sovits-genlist <dir>",
+	Use:   "sovits-genlist {dir}",
 	Args:  cobra.ExactArgs(1),
 	Short: "Generates a GPT-SoVITS dataset annotation dataset .list file",
 	Long: `Generates a GPT-SoVITS dataset annotation dataset .list file.

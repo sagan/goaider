@@ -11,14 +11,17 @@ import (
 
 	"github.com/sagan/goaider/cmd/csv"
 	"github.com/sagan/goaider/util"
+	"github.com/sagan/goaider/util/stringutil"
 )
 
 var joinCmd = &cobra.Command{
-	Use:   "join --on <on_field> <left.csv> <right.csv>",
+	Use:   "join --on <on_field> {left.csv} {right.csv}",
 	Short: "Merge (left join) two csv files",
 	Long: `Merge (left join) two csv files.
 
 Read two csv files, "join" them and output a new csv. Output merged csv to stdout by default.
+
+Either {left.csv} or {right.csv} argument can be "-" for reading from stdin.
 
 - It's similar to SQL left join semantic, but for each left csv row,
   at most one (1) matched right csv row is allowed; if multiple right row match, use the first one.
@@ -69,9 +72,37 @@ func join(cmd *cobra.Command, args []string) (err error) {
 		flagRightPrefix = strings.TrimSuffix(flagRightPrefix, "_") + "_"
 	}
 
+	var leftCsvReader, rightCsvReader io.Reader
+	if argLeftCsv == "-" {
+		leftCsvReader = os.Stdin
+	} else {
+		f, err := os.Open(argLeftCsv)
+		if err != nil {
+			return fmt.Errorf("failed to open left CSV file %q: %w", argLeftCsv, err)
+		}
+		defer f.Close()
+		leftCsvReader = f
+	}
+	if argRightCsv == "-" {
+		// If right CSV is stdin, and left CSV was also stdin, this is an error.
+		if argLeftCsv == "-" {
+			return fmt.Errorf("cannot read both left and right CSV from stdin")
+		}
+		rightCsvReader = os.Stdin
+	} else {
+		f, err := os.Open(argRightCsv)
+		if err != nil {
+			return fmt.Errorf("failed to open right CSV file %q: %w", argRightCsv, err)
+		}
+		defer f.Close()
+		rightCsvReader = f
+	}
+	leftCsvReader = stringutil.GetTextReader(leftCsvReader)
+	rightCsvReader = stringutil.GetTextReader(rightCsvReader)
+
 	reader, writer := io.Pipe()
 	go func() {
-		err := joinCsvFiles(argLeftCsv, argRightCsv, writer, leftOn, rightOn,
+		err := joinCsvFiles(leftCsvReader, rightCsvReader, writer, leftOn, rightOn,
 			flagLeftPrefix, flagRightPrefix, flagFullJoin, csv.FlagNoHeader)
 		writer.CloseWithError(err)
 	}()

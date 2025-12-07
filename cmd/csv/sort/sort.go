@@ -11,9 +11,11 @@ import (
 )
 
 var sortCmd = &cobra.Command{
-	Use:   "sort --key <key_field> <input.csv | ->",
+	Use:   "sort --key <key_field> {input.csv | -}",
 	Short: "Sort csv file based on key field",
 	Long: `Sort csv file based on key field.
+
+The {input.csv} argument can be "-" for reading from stdin.
 
 Output to stdout by default. If --inplace is set, update input file in place.
 Use "-" as input arg to read from stdin.`,
@@ -40,7 +42,7 @@ func sortFunc(cmd *cobra.Command, args []string) (err error) {
 		csv.FlagForce = true // implied overwrite
 	}
 
-	err = helper.InputFileAndOutput(argInput, csv.FlagOutput, csv.FlagForce, func(r io.Reader, w io.Writer,
+	err = helper.InputTextFileAndOutput(argInput, csv.FlagOutput, csv.FlagForce, func(r io.Reader, w io.Writer,
 		inputName, outputNme string) error {
 		return sortCsvFile(r, flagKey, w, csv.FlagNoHeader)
 	})

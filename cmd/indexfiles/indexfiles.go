@@ -28,7 +28,7 @@ var (
 
 // indexfilesCmd represents the norfilenames command
 var indexfilesCmd = &cobra.Command{
-	Use:   "indexfiles <dir>",
+	Use:   "indexfiles {dir}",
 	Short: "Index files in a directory",
 	Long: `Index files in a directory.
 

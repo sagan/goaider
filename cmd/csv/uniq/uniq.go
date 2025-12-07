@@ -13,16 +13,16 @@ import (
 )
 
 var uniqCmd = &cobra.Command{
-	Use:   "uniq --key <key_field> <input.csv | ->",
+	Use:   "uniq --key <key_field> {input.csv | -}",
 	Short: "Uniquify csv file to remove duplicate rows",
 	Long: `Uniquify csv file to remove duplicate rows.
+
+The {input.csv} argument can be "-" for reading from stdin.
 
 Output to stdout by default. If --inplace is set, update input file in place.
 
 Two rows are considerred duplicate if they have the same key field value.
-All duplicate rows except the first one are removed from the output.
-
-Use "-" as input arg to read from stdin.`,
+All duplicate rows except the first one are removed from the output.`,
 	Args: cobra.ExactArgs(1),
 	RunE: uniq,
 }
@@ -69,7 +69,7 @@ func uniq(cmd *cobra.Command, args []string) (err error) {
 		csv.FlagForce = true // implied overwrite
 	}
 
-	err = helper.InputFileAndOutput(argInput, csv.FlagOutput, csv.FlagForce, func(r io.Reader, w io.Writer,
+	err = helper.InputTextFileAndOutput(argInput, csv.FlagOutput, csv.FlagForce, func(r io.Reader, w io.Writer,
 		inputName, outputNme string) error {
 		duplicates, err := uniqCsvFile(r, flagKey, w, nil, csv.FlagNoHeader)
 		if err == nil {

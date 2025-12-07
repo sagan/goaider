@@ -24,7 +24,7 @@ var (
 )
 
 var cropCmd = &cobra.Command{
-	Use:   "crop <dir>",
+	Use:   "crop {dir}",
 	Short: "Crop and resize images in a directory",
 	Long: `Crop and resize images in a directory.
 	

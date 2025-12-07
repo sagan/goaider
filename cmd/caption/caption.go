@@ -49,7 +49,7 @@ var (
 )
 
 var captionCmd = &cobra.Command{
-	Use:   "caption <dir>",
+	Use:   "caption {dir}",
 	Short: "Generate captions for images in a directory",
 	Long: `This command generates captions for all images in a specified directory using the Gemini API.
 
@@ -67,7 +67,7 @@ func init() {
 	captionCmd.Flags().StringVarP(&flagIdentity, "identity", "", "",
 		"Optional: The trigger word (e.g., 'foobar' or 'photo of foobar') to prepend to each caption")
 	captionCmd.Flags().StringVarP(&flagModel, "model", "", constants.DEFAULT_GEMINI_MODEL,
-		"The model to use for captioning")
+		"The model to use for captioning. "+constants.HELP_MODEL)
 }
 
 func caption(cmd *cobra.Command, args []string) error {

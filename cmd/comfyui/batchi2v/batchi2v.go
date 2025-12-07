@@ -81,7 +81,8 @@ func init() {
 		"ComfyUI server address(es)")
 	batchI2VCmd.Flags().StringArrayVarP(&flagVars, "var", "v", nil,
 		`Set variables. Use "%image%" for input image, "%prompt%" for LLM text, "%rand%" for random seed.`)
-	batchI2VCmd.Flags().StringVarP(&flagGeminiModel, "model", "", constants.DEFAULT_GEMINI_MODEL, "Gemini Model to use")
+	batchI2VCmd.Flags().StringVarP(&flagGeminiModel, "model", "", constants.DEFAULT_GEMINI_MODEL,
+		"The Model to use. "+constants.HELP_MODEL)
 	batchI2VCmd.Flags().BoolVarP(&flagNoPrompt, "no-prompt", "", false, "Skip LLM prompt generation")
 	batchI2VCmd.Flags().StringVarP(&flagPromptTmpl, "prompt-template", "", DEFAULT_PROMPT,
 		"Instruction prompt for the LLM")
@@ -142,10 +143,16 @@ func doBatchI2V(cmd *cobra.Command, args []string) error {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 	go func() {
+		shutdowning := false
 		select {
 		case <-sigChan:
-			log.Warn("Received interrupt signal, shutting down...")
-			cancel()
+			if shutdowning {
+				os.Exit(1)
+			} else {
+				log.Warnf("Received interrupt signal, shutting down... Press ctrl+c again to force exit immediately")
+				shutdowning = true
+				cancel()
+			}
 		case <-ctx.Done():
 		}
 	}()
@@ -299,7 +306,7 @@ func processI2V(ctx context.Context, pool chan *api.Client, task i2vTask) error 
 				imgData,
 				mimeType,
 			)
-			log.Printf("llm request %s response: %s", flagPromptTmpl, util.ToJson(llmResp))
+			log.Printf("llm request %s, err=%v, response: %s", flagPromptTmpl, lErr, util.ToJson(llmResp))
 			return lErr
 		})
 
@@ -325,7 +332,7 @@ func processI2V(ctx context.Context, pool chan *api.Client, task i2vTask) error 
 		}
 
 		// Pass the whole llmResp struct to execute function
-		err := executeI2VWorkflow(client, task, llmResp)
+		err := executeI2VWorkflow(ctx, client, task, llmResp)
 
 		pool <- client
 
@@ -333,7 +340,7 @@ func processI2V(ctx context.Context, pool chan *api.Client, task i2vTask) error 
 			return nil
 		}
 
-		log.Printf("    ⚠️ Attempt %d failed on %s: %v", attempt+1, client.Base, err)
+		log.Printf("    ⚠️ Attempt %d failed on %s: %v", attempt+1, client.Origin, err)
 
 		if attempt == maxRetries {
 			return fmt.Errorf("max retries exceeded: %w", err)
@@ -349,7 +356,7 @@ func processI2V(ctx context.Context, pool chan *api.Client, task i2vTask) error 
 	return nil
 }
 
-func executeI2VWorkflow(client *api.Client, task i2vTask, llmResp *I2VResponse) error {
+func executeI2VWorkflow(ctx context.Context, client *api.Client, task i2vTask, llmResp *I2VResponse) error {
 	graph, err := api.NewGraph(client, flagWorkflow)
 	if err != nil {
 		return err
@@ -378,7 +385,7 @@ func executeI2VWorkflow(client *api.Client, task i2vTask, llmResp *I2VResponse) 
 		return fmt.Errorf("prepare graph: %w", err)
 	}
 
-	outputs, err := client.RunWorkflow(graph)
+	outputs, err := client.RunWorkflow(ctx, graph)
 	if err != nil {
 		return err
 	}

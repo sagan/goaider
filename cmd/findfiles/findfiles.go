@@ -11,6 +11,8 @@ import (
 
 	"github.com/sagan/goaider/cmd"
 	"github.com/sagan/goaider/features/csvfeature"
+	"github.com/sagan/goaider/util"
+	"github.com/sagan/goaider/util/stringutil"
 )
 
 var findfilesCmd = &cobra.Command{
@@ -65,6 +67,7 @@ func doFindfiles(cmd *cobra.Command, args []string) (err error) {
 		defer f.Close()
 		listFile = f
 	}
+	listFile = stringutil.GetTextReader(listFile)
 	if flagCsvColumn != "" {
 		csvData, err := csvfeature.UnmarshalCsv[map[string]string](listFile)
 		if err != nil {
@@ -73,9 +76,11 @@ func doFindfiles(cmd *cobra.Command, args []string) (err error) {
 		var b strings.Builder
 		for _, row := range csvData {
 			if val, ok := row[flagCsvColumn]; ok {
+				fmt.Printf("row: %s\n", util.ToJson(row))
 				b.WriteString(val)
 				b.WriteByte('\n')
 			} else {
+				fmt.Printf("invalid row: %s\n", util.ToJson(row))
 				return fmt.Errorf("CSV column %q not found in some rows", flagCsvColumn)
 			}
 		}

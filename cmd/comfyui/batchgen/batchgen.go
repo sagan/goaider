@@ -216,7 +216,7 @@ func runBatchGroup(ctx context.Context, pool chan *api.Client, prompt, outputDir
 	for i := range batchSize {
 		taskID := i + 1
 		g.Go(func() error {
-			return runWithRetry(pool, prompt, outputDir, taskID)
+			return runWithRetry(ctx, pool, prompt, outputDir, taskID)
 		})
 	}
 
@@ -225,13 +225,13 @@ func runBatchGroup(ctx context.Context, pool chan *api.Client, prompt, outputDir
 
 // runWithRetry attempts to execute a single workflow run.
 // It acquires a client, tries to run, and if it fails, backs off and tries another client.
-func runWithRetry(pool chan *api.Client, prompt, outputDir string, taskID int) error {
+func runWithRetry(ctx context.Context, pool chan *api.Client, prompt, outputDir string, taskID int) error {
 	maxRetries := 5
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		// Acquire client
 		client := <-pool
 
-		err := executeWorkflow(client, prompt, outputDir)
+		err := executeWorkflow(ctx, client, prompt, outputDir)
 
 		// Release client back to pool
 		pool <- client
@@ -240,7 +240,7 @@ func runWithRetry(pool chan *api.Client, prompt, outputDir string, taskID int) e
 			return nil // Success
 		}
 
-		log.Printf("⚠️ Task %d failed on %s (Attempt %d/%d): %v", taskID, client.Base, attempt+1, maxRetries+1, err)
+		log.Printf("⚠️ Task %d failed on %s (Attempt %d/%d): %v", taskID, client.Origin, attempt+1, maxRetries+1, err)
 
 		if attempt == maxRetries {
 			return fmt.Errorf("task %d exceeded max retries: %w", taskID, err)
@@ -255,7 +255,7 @@ func runWithRetry(pool chan *api.Client, prompt, outputDir string, taskID int) e
 	return nil
 }
 
-func executeWorkflow(client *api.Client, prompt, outputDir string) error {
+func executeWorkflow(ctx context.Context, client *api.Client, prompt, outputDir string) error {
 	// 1. Create Graph (New instance to avoid state pollution)
 	graph, err := api.NewGraph(client, flagWorkflow)
 	if err != nil {
@@ -281,7 +281,7 @@ func executeWorkflow(client *api.Client, prompt, outputDir string) error {
 		return err
 	}
 
-	outputs, err := client.RunWorkflow(graph)
+	outputs, err := client.RunWorkflow(ctx, graph)
 	if err != nil {
 		return err
 	}

@@ -20,7 +20,7 @@ var (
 
 // norfilenamesCmd represents the norfilenames command
 var norfilenamesCmd = &cobra.Command{
-	Use:   "norfilenames <dir>",
+	Use:   "norfilenames {dir}",
 	Args:  cobra.ExactArgs(1),
 	Short: "Normalize filenames in a directory",
 	Long: `Normalize filenames in a directory.

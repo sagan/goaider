@@ -2,12 +2,12 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -57,24 +57,6 @@ func parseAddrFromUrl(rawURL string) (schema string, addr string, port int, err 
 // 这个 client.ComfyClient 真 TMD 难用。
 type Client struct {
 	*client.ComfyClient
-	Base string // Base addr. E.g. "http://127.0.0.1:8188"
-}
-
-// fileType: input | output.
-func (c *Client) CheckFileExists(filename string, fileType client.ImageType) (exists bool, err error) {
-	params := url.Values{}
-	params.Add("filename", filename)
-	params.Add("type", string(fileType))
-	resp, err := http.DefaultClient.Get(fmt.Sprintf("%s/view?%s", c.Base, params.Encode()))
-	if err != nil {
-		return false, err
-	}
-	exists = resp.StatusCode == 200
-	return exists, nil
-}
-
-func (c *Client) CheckInputFileExists(filename string) (exists bool, err error) {
-	return c.CheckFileExists(filename, client.InputImageType)
 }
 
 // clientaddr : "127.0.0.1:8188" or "http://127.0.0.1:8188" .
@@ -93,14 +75,8 @@ func CreateAndInitComfyClient(clientaddr string) (comfyClient *Client, err error
 			return nil, err
 		}
 	}
-	base := schema + "://" + addr
-	if schema == "http" && port != 80 || schema == "https" && port != 443 {
-		base = fmt.Sprintf("%s:%d", base, port)
-	}
-
 	return &Client{
 		ComfyClient: interClient,
-		Base:        base,
 	}, nil
 }
 
@@ -239,7 +215,7 @@ func (comfyClient *Client) PrepareGraph(graph *graphapi.Graph) (err error) {
 // It initializes the client, queues the prompt, and waits for the workflow to complete,
 // collecting any image or GIF outputs.
 // Each item in returned outputs have global unique filename.
-func (comfyClient *Client) RunWorkflow(graph *graphapi.Graph) (outputs ComfyuiOutputs, err error) {
+func (comfyClient *Client) RunWorkflow(ctx context.Context, graph *graphapi.Graph) (outputs ComfyuiOutputs, err error) {
 	// queue the prompt and get the resulting image
 	item, err := comfyClient.QueuePrompt(graph)
 	if err != nil {
@@ -255,43 +231,48 @@ func (comfyClient *Client) RunWorkflow(graph *graphapi.Graph) (outputs ComfyuiOu
 
 	// continuously read messages from the QueuedItem until we get the "stopped" message type
 	for continueLoop := true; continueLoop; {
-		msg := <-item.Messages
-		switch msg.Type {
-		case "stopped":
-			// if we were stopped for an exception, display the exception message
-			qm := msg.ToPromptMessageStopped()
-			if qm.Exception != nil {
-				return nil, fmt.Errorf("exception: %v", qm.Exception)
-			}
-			continueLoop = false
-		case "data":
-			qm := msg.ToPromptMessageData()
-			// data objects have the fields: Filename, Subfolder, Type
-			// * Subfolder is the subfolder in the output directory
-			// * Type is the type of the image temp/
-			for k, v := range qm.Data {
-				if k == "images" || k == "gifs" { // video outputs are also in "images".
-					for _, output := range v {
-						imgData, err := comfyClient.GetImage(output)
-						if err != nil {
-							return outputs, fmt.Errorf("failed to get image: %w", err)
-						}
-						if imgData == nil || len(*imgData) == 0 {
-							log.Warnf("image data is empty for output %v", output)
-							continue
-						}
-						outputs = append(outputs, &ComfyuiOutput{
-							Data:     *imgData,
-							Filename: genFilename(*imgData, &output),
-							Text:     output.Text,
-							Type:     output.Type,
-						})
-					}
-					return outputs, nil
+		select {
+		case <-ctx.Done():
+			comfyClient.CancelTask("")
+			return nil, ctx.Err()
+		case msg := <-item.Messages:
+			switch msg.Type {
+			case "stopped":
+				// if we were stopped for an exception, display the exception message
+				qm := msg.ToPromptMessageStopped()
+				if qm.Exception != nil {
+					return nil, fmt.Errorf("exception: %v", qm.Exception)
 				}
+				continueLoop = false
+			case "data":
+				qm := msg.ToPromptMessageData()
+				// data objects have the fields: Filename, Subfolder, Type
+				// * Subfolder is the subfolder in the output directory
+				// * Type is the type of the image temp/
+				for k, v := range qm.Data {
+					if k == "images" || k == "gifs" { // video outputs are also in "images".
+						for _, output := range v {
+							imgData, err := comfyClient.GetImage(output)
+							if err != nil {
+								return outputs, fmt.Errorf("failed to get image: %w", err)
+							}
+							if imgData == nil || len(*imgData) == 0 {
+								log.Warnf("image data is empty for output %v", output)
+								continue
+							}
+							outputs = append(outputs, &ComfyuiOutput{
+								Data:     *imgData,
+								Filename: genFilename(*imgData, &output),
+								Text:     output.Text,
+								Type:     output.Type,
+							})
+						}
+						return outputs, nil
+					}
+				}
+			default: // progress
+				// log.Printf("event %s: %v", msg.Type, msg.Message)
 			}
-		default: // progress
-			// log.Printf("event %s: %v", msg.Type, msg.Message)
 		}
 	}
 	return outputs, fmt.Errorf("comfyui server disconnected")

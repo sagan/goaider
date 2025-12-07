@@ -24,7 +24,7 @@ import (
 )
 
 var joinCmd = &cobra.Command{
-	Use:   "query <sql>",
+	Use:   "query {sql}",
 	Short: "Run SQL query on csv files",
 	Long: `Run SQL query on csv files.
 

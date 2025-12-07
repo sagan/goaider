@@ -18,6 +18,7 @@ import (
 
 	"github.com/sagan/goaider/util"
 	"github.com/sagan/goaider/util/pathutil"
+	"github.com/sagan/goaider/util/stringutil"
 )
 
 func ParseFilenameArgs(args ...string) []string {
@@ -244,7 +245,9 @@ func MakeCleanTmpDir(tmpdir string) error {
 	return os.MkdirAll(tmpdir, 0777)
 }
 
-// Read input file, process it using custom function and output the result.
+// Read a text input file, process it using custom function and output the result.
+// The input text is normalized (converted to UTF-8 without BOM and \n line break) before being processed,
+// UTF-8 w/o BOM / UTF-16 LE BOM / UTF-16 BE BOM source encodings are supported.
 // Both input or output argument can be filenames, or "-" for stdin / stdout.
 // The input argument must not be empty.
 // If output argument is empty, it defaults to input if input is not "-" (meaning update input file in place),
@@ -258,7 +261,7 @@ func MakeCleanTmpDir(tmpdir string) error {
 // - output: Filename or "-" for stdout.
 // - processor: Function that reads from r and writes to w.
 // - force: If true, allows overwriting existing output files.
-func InputFileAndOutput(input, output string, force bool, processor func(r io.Reader, w io.Writer,
+func InputTextFileAndOutput(input, output string, force bool, processor func(r io.Reader, w io.Writer,
 	inputName, outputNme string) error) error {
 	if input == "" {
 		return errors.New("input argument must not be empty")
@@ -299,6 +302,7 @@ func InputFileAndOutput(input, output string, force bool, processor func(r io.Re
 		defer f.Close()
 		reader = f
 	}
+	reader = stringutil.GetTextReader(reader)
 
 	// 4. Setup Output Stream & Temp File Logic
 	var writer io.Writer

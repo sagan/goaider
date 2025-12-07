@@ -1,10 +1,14 @@
 package run
 
 import (
+	"context"
 	"fmt"
-	"log"
+	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"github.com/sagan/goaider/cmd/comfyui"
@@ -12,9 +16,11 @@ import (
 )
 
 var runCmd = &cobra.Command{
-	Use:   "run <workflow.json | ->",
+	Use:   "run {workflow.json | -}",
 	Short: "Run a ComfyUI workflow and save output",
 	Long: `Run a ComfyUI workflow and save output.
+
+The {workflow.json} argument can be "-" for reading from stdin.
 
 Example:
   goaider comfyui run flux.json -s 127.0.0.1:8188 -v "41:0:young girl, smiling" -v "31:0:%rand%"`,
@@ -53,6 +59,25 @@ func doRun(cmd *cobra.Command, args []string) (err error) {
 	}
 	argWorkflow := args[0]
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		shutdowning := false
+		select {
+		case <-sigChan:
+			if shutdowning {
+				os.Exit(1)
+			} else {
+				log.Warnf("Received interrupt signal, shutting down... Press ctrl+c again to force exit immediately")
+				shutdowning = true
+				cancel()
+			}
+		case <-ctx.Done():
+		}
+	}()
+
 	client, err := api.CreateAndInitComfyClient(flagServer)
 	if err != nil {
 		return fmt.Errorf("failed to create client: %w", err)
@@ -74,7 +99,7 @@ func doRun(cmd *cobra.Command, args []string) (err error) {
 		if err != nil {
 			return fmt.Errorf("failed to prepare graph: %w", err)
 		}
-		outputs, err := client.RunWorkflow(graph)
+		outputs, err := client.RunWorkflow(ctx, graph)
 		if err != nil {
 			return err
 		}

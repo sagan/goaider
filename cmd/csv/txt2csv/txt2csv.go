@@ -21,7 +21,8 @@ var txt2csvCmd = &cobra.Command{
 	Short: "Create csv from one or more text files",
 	Long: `Create csv from one or more text files.
 
-{text_file} can be "-" to read from stdin.
+The {text_file} argument can be "-" to read from stdin.
+
 Each provided text file is treated as a column of output csv, each line is a csv column value.
 The column names of output csv defaults to "c1", "c2"..., set them through --columns flag.
 If --no-header flag is set, the output csv doesn't have header row.`,
@@ -41,17 +42,21 @@ func doText2csv(cmd *cobra.Command, args []string) (err error) {
 	}
 	var allLines [][]string
 	for _, filePath := range args {
-		var content []byte
+		var input io.Reader
 		if filePath == "-" {
-			content, err = io.ReadAll(os.Stdin)
-			if err != nil {
-				return fmt.Errorf("failed to read from stdin: %w", err)
-			}
+			input = os.Stdin
 		} else {
-			content, err = os.ReadFile(filePath)
+			f, err := os.Open(filePath)
 			if err != nil {
-				return fmt.Errorf("failed to read file %q: %w", filePath, err)
+				return fmt.Errorf("failed to open input file %q: %w", filePath, err)
 			}
+			defer f.Close()
+			input = f
+		}
+		input = stringutil.GetTextReader(input)
+		content, err := io.ReadAll(input)
+		if err != nil {
+			return fmt.Errorf("failed to read from stdin: %w", err)
 		}
 		lines := stringutil.SplitLines(string(content))
 		allLines = append(allLines, lines)

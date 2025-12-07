@@ -23,7 +23,7 @@ var (
 
 // extractallCmd represents the norfilenames command
 var extractallCmd = &cobra.Command{
-	Use:     "extractall <input_dir | archive_file>",
+	Use:     "extractall {input_dir | archive_file}",
 	Aliases: []string{"extract"},
 	Short:   "Extract all archive files in the dir",
 	Long:    `Extract all archive files in the dir.`,

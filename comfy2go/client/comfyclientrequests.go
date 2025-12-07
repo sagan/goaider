@@ -1,11 +1,13 @@
 package client
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"net/url"
 	"sort"
 	"strconv"
@@ -345,4 +347,48 @@ func (c *ComfyClient) EraseHistoryItem(promptID string) error {
 
 	io.ReadAll(resp.Body)
 	return nil
+}
+
+// @mod : below are new functions
+
+// fileType: input | output.
+func (c *ComfyClient) CheckFileExists(filename string, fileType ImageType) (exists bool, err error) {
+	params := url.Values{}
+	params.Add("filename", filename)
+	params.Add("type", string(fileType))
+	resp, err := c.httpclient.Get(fmt.Sprintf("%s/view?%s", c.Origin, params.Encode()))
+	if err != nil {
+		return false, err
+	}
+	exists = resp.StatusCode == 200
+	return exists, nil
+}
+
+// If promptId is empty, clear all tasks, including the being processed one.
+// If promptId is not empty, clear this task only.
+func (c *ComfyClient) CancelTask(promptId string) (err error) {
+	payload := map[string]any{}
+	if promptId == "" {
+		payload["clear"] = true
+	} else {
+		payload["delete"] = []string{promptId}
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	_, err = c.httpclient.Post(fmt.Sprintf("%s/queue", c.Origin), "application/json", bytes.NewReader(data))
+	if err != nil {
+		return err
+	}
+	//@todo : only interrupt current task if it's target prompt id
+	_, err = http.DefaultClient.Post(fmt.Sprintf("%s/interrupt", c.Origin), "application/json", nil)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *ComfyClient) CheckInputFileExists(filename string) (exists bool, err error) {
+	return c.CheckFileExists(filename, InputImageType)
 }

@@ -79,10 +79,10 @@ func doBase64decode(cmd *cobra.Command, args []string) (err error) {
 			return fmt.Errorf("failed to decode data URL: %w", err)
 		}
 		decodedBytes = dataURL.Data
-	} else if strings.ContainsAny(inputString, "+/") {
+	} else if strings.ContainsAny(inputString, "+/=") {
 		decodedBytes, err = base64.StdEncoding.DecodeString(inputString)
 	} else {
-		decodedBytes, err = base64.URLEncoding.DecodeString(inputString)
+		decodedBytes, err = base64.URLEncoding.WithPadding(base64.NoPadding).DecodeString(inputString)
 	}
 	if err != nil {
 		return fmt.Errorf("failed to decode base64: %w", err)

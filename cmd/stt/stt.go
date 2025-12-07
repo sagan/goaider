@@ -24,7 +24,7 @@ var (
 
 // sttCmd represents the stt command
 var sttCmd = &cobra.Command{
-	Use:   "stt <dir>",
+	Use:   "stt {dir}",
 	Args:  cobra.ExactArgs(1),
 	Short: "Generates speech-to-text transcripts for audio files",
 	Long: `Generates speech-to-text transcripts for audio files.
@@ -43,7 +43,7 @@ func init() {
 	cmd.RootCmd.AddCommand(sttCmd)
 	sttCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Overwrite existing .txt transcript files")
 	sttCmd.Flags().StringVarP(&flagModel, "model", "", constants.DEFAULT_GEMINI_MODEL,
-		"The model to use for transcription")
+		"The model to use for transcription. "+constants.HELP_MODEL)
 }
 
 func stt(cmd *cobra.Command, args []string) error {

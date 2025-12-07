@@ -40,7 +40,8 @@ var (
 func init() {
 	genCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Force overwriting without confirmation")
 	genCmd.Flags().StringVarP(&flatOutput, "output", "o", ".", `Output dir`)
-	genCmd.Flags().StringVarP(&flagModel, "model", "", constants.DEFAULT_GEMINI_MODEL, "The model to use")
+	genCmd.Flags().StringVarP(&flagModel, "model", "", constants.DEFAULT_GEMINI_MODEL,
+		"The model to use. "+constants.HELP_MODEL)
 	comfyui.ComfyuiCmd.AddCommand(genCmd)
 }
 

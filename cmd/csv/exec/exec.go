@@ -7,6 +7,7 @@ package exec
 
 import (
 	"fmt"
+	"io"
 	"os"
 
 	log "github.com/sirupsen/logrus"
@@ -14,10 +15,11 @@ import (
 
 	csvCmd "github.com/sagan/goaider/cmd/csv"
 	"github.com/sagan/goaider/constants"
+	"github.com/sagan/goaider/util/stringutil"
 )
 
 var execCmd = &cobra.Command{
-	Use:   "exec <input.csv | ->",
+	Use:   "exec {input.csv | -}",
 	Short: "Execute a command for each line of a CSV file",
 	Long: `Execute a command for each line of a CSV file.
 
@@ -47,16 +49,18 @@ func init() {
 
 func doExec(cmd *cobra.Command, args []string) (err error) {
 	argInput := args[0]
-	var input *os.File
+	var input io.Reader
 	if argInput == "-" {
 		input = os.Stdin
 	} else {
-		input, err = os.Open(argInput)
+		f, err := os.Open(argInput)
 		if err != nil {
 			return err
 		}
-		defer input.Close()
+		defer f.Close()
+		input = f
 	}
+	input = stringutil.GetTextReader(input)
 	successRows, skipRows, errorRows, err := execCsv(input, flagTemplate, csvCmd.FlagNoHeader,
 		flagContinueOnError, flagDryRun)
 	log.Printf("Complete: success / skip / error rows: %d / %d / %d", successRows, skipRows, errorRows)

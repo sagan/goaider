@@ -11,10 +11,12 @@ import (
 )
 
 var renderCmd = &cobra.Command{
-	Use:     "render <input.csv | ->",
+	Use:     "render {input.csv | -}",
 	Aliases: []string{"display", "show"},
 	Short:   "Render the contents of a csv file",
 	Long: `Render the contents of a csv file.
+
+The {input.csv} argument can be "-" for reading from stdin.
 
 Example:
   goaider csv render input.csv --template "{{.foo}} - {{.bar}}"`,
@@ -41,7 +43,7 @@ func init() {
 func doRender(cmd *cobra.Command, args []string) (err error) {
 	argInput := args[0]
 
-	err = helper.InputFileAndOutput(argInput, csvCmd.FlagOutput, csvCmd.FlagForce, func(r io.Reader,
+	err = helper.InputTextFileAndOutput(argInput, csvCmd.FlagOutput, csvCmd.FlagForce, func(r io.Reader,
 		w io.Writer, inputName, outputNme string) error {
 		return renderCsv(r, flagTemplate, csvCmd.FlagNoHeader, w, flagOneLine)
 	})
