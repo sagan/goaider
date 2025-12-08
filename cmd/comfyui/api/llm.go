@@ -50,6 +50,6 @@ func GenerateActionList(apiKey, model, subject string, theme string, temperature
 
 	prompt := strings.Join(paragraphes, "\n\n")
 
-	log.Printf("LLM prompt: %s", prompt)
+	log.Printf("Use %s model; prompt: %s", model, prompt)
 	return llm.ChatJsonResponse[CreativeLists](apiKey, model, prompt, temperature)
 }

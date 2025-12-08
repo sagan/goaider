@@ -283,19 +283,23 @@ func NewGraph(comfyClient *Client, filename string) (graph *graphapi.Graph, err 
 	var data []byte
 	if filename == "-" {
 		data, err = io.ReadAll(os.Stdin)
-		if err != nil {
-			return nil, err
-		}
 	} else {
 		data, err = os.ReadFile(filename)
-		if err != nil {
-			return nil, err
-		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	jsonWorkflow := ""
+	if utf8.Valid(data) {
+		jsonWorkflow = string(data)
+	} else if meta, err := ExtractComfyMetadata(bytes.NewReader(data)); err == nil {
+		// Try to parse workflow from ComfyUI generated png file
+		jsonWorkflow = util.ToJson(meta.Workflow)
 	}
 	// json workflow
-	if utf8.Valid(data) {
+	if jsonWorkflow != "" {
 		var obj map[string]any
-		err = json.Unmarshal(data, &obj)
+		err = json.Unmarshal([]byte(jsonWorkflow), &obj)
 		if err != nil {
 			return nil, err
 		}
@@ -320,7 +324,6 @@ func NewGraph(comfyClient *Client, filename string) (graph *graphapi.Graph, err 
 		}
 		graph, _, err = comfyClient.NewGraphFromJsonString(string(data))
 	} else {
-		// png workflow
 		graph, _, err = comfyClient.NewGraphFromPNGReader(bytes.NewReader(data))
 	}
 	return graph, err

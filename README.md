@@ -23,4 +23,5 @@
   - `goaider comfyui run <workflow.json>` : 直接运行 json / png 格式的 workflow 并保存输出文件。
   - `goaider comfyui batchgen` : 批量运行 AIGC 图像生成任务。通过 csv 文件读取输入作为 prompt。
   - `goaider comfyui batchi2v` : 批量运行 image-to-video 视频生成任务。读取输入目录下所有图片文件，使用 LLM 生成提示词，然后生成视频。
+  - `goaider comfyui parsemeta <input.png>` : 从 ComfyUI 生成的 PNG 图片里提取元数据：生成图片时使用的工作流(workflow)和提示(prompt)信息。
 

@@ -21,11 +21,11 @@ var (
 )
 
 // Parse an TensorBoard event file
-var sttCmd = &cobra.Command{
+var parsetfefCmd = &cobra.Command{
 	Use:     "parsetfef {filename}",
-	Aliases: []string{"parsetfevents"},
-	Short:   "Parse TensorFlow event file",
-	Long: `Parse TensorFlow event file.
+	Aliases: []string{"parsetf", "parsetfevents"},
+	Short:   "Parse TensorFlow events file",
+	Long: `Parse TensorFlow events file.
 	
 The original TensorFlow event filename is usually events.out.tfevents.{timestamp}.{hostname}.{pid}.{global_uid} format,
 which is often used by TensorBoard for visualization.
@@ -38,11 +38,11 @@ Use --output flag to specify the output file.`,
 }
 
 func init() {
-	sttCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Force overwriting without confirmation")
-	sttCmd.Flags().StringVarP(&flagOutput, "output", "o", "-", `Output file path. Use "-" for stdout`)
-	sttCmd.Flags().BoolVarP(&flagHumanReadable, "human-readable", "H", false,
+	parsetfefCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Force overwriting without confirmation")
+	parsetfefCmd.Flags().StringVarP(&flagOutput, "output", "o", "-", `Output file path. Use "-" for stdout`)
+	parsetfefCmd.Flags().BoolVarP(&flagHumanReadable, "human-readable", "H", false,
 		"Output in a human friendly column format instead of CSV")
-	cmd.RootCmd.AddCommand(sttCmd)
+	cmd.RootCmd.AddCommand(parsetfefCmd)
 }
 
 func parsetfef(cmd *cobra.Command, args []string) (err error) {

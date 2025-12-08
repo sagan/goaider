@@ -1,0 +1,640 @@
+{
+  "prompt": {
+    "27": {
+      "_meta": {
+        "title": "EmptySD3LatentImage"
+      },
+      "class_type": "EmptySD3LatentImage",
+      "inputs": {
+        "batch_size": 1,
+        "height": 1024,
+        "width": 1024
+      }
+    },
+    "30": {
+      "_meta": {
+        "title": "Load Checkpoint"
+      },
+      "class_type": "CheckpointLoaderSimple",
+      "inputs": {
+        "ckpt_name": "flux1-dev-fp8.safetensors"
+      }
+    },
+    "31": {
+      "_meta": {
+        "title": "KSampler"
+      },
+      "class_type": "KSampler",
+      "inputs": {
+        "cfg": 1,
+        "denoise": 1,
+        "latent_image": [
+          "27",
+          0
+        ],
+        "model": [
+          "30",
+          0
+        ],
+        "negative": [
+          "33",
+          0
+        ],
+        "positive": [
+          "35",
+          0
+        ],
+        "sampler_name": "euler",
+        "scheduler": "simple",
+        "seed": 570043048455009,
+        "steps": 20
+      }
+    },
+    "33": {
+      "_meta": {
+        "title": "CLIP Text Encode (Negative Prompt)"
+      },
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "clip": [
+          "30",
+          1
+        ],
+        "text": ""
+      }
+    },
+    "35": {
+      "_meta": {
+        "title": "FluxGuidance"
+      },
+      "class_type": "FluxGuidance",
+      "inputs": {
+        "conditioning": [
+          "6",
+          0
+        ],
+        "guidance": 3.5
+      }
+    },
+    "6": {
+      "_meta": {
+        "title": "CLIP Text Encode (Positive Prompt)"
+      },
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "clip": [
+          "30",
+          1
+        ],
+        "text": "A centered composition of a magical fairy-tale scene featuring a 3 year old girl with curly golden hair facing the camera. She wears an elegant green dress with lace and has shimmering butterfly wings. The lavishly decorated interior includes baroque-style wallpaper, intricate ceiling moldings, and a large arched window letting in gentle sunlight. Magical crystal stones are embedded in the walls and floor, adding a touch of magic and mystery. An antique wooden table with fresh flowers adds vibrancy to the room. Dreamy color palette from pastel greens to soft golds. Central focus on the girl with balanced elements. The scene is rendered in ultra-high definition, with cinematic lighting, rich details, and realistic textures to create a movie-quality visual experience."
+      }
+    },
+    "8": {
+      "_meta": {
+        "title": "VAE Decode"
+      },
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "31",
+          0
+        ],
+        "vae": [
+          "30",
+          2
+        ]
+      }
+    },
+    "9": {
+      "_meta": {
+        "title": "Save Image"
+      },
+      "class_type": "SaveImage",
+      "inputs": {
+        "filename_prefix": "ComfyUI",
+        "images": [
+          "8",
+          0
+        ]
+      }
+    }
+  },
+  "workflow": {
+    "config": {},
+    "extra": {
+      "ds": {
+        "offset": [
+          77.65579585030655,
+          168.14007240597186
+        ],
+        "scale": 1.4641000000000013
+      },
+      "node_versions": {
+        "comfy-core": "0.3.14"
+      }
+    },
+    "groups": [],
+    "last_link_id": 63,
+    "last_node_id": 42,
+    "links": [
+      [
+        9,
+        8,
+        0,
+        9,
+        0,
+        "IMAGE"
+      ],
+      [
+        45,
+        30,
+        1,
+        6,
+        0,
+        "CLIP"
+      ],
+      [
+        51,
+        27,
+        0,
+        31,
+        3,
+        "LATENT"
+      ],
+      [
+        52,
+        31,
+        0,
+        8,
+        0,
+        "LATENT"
+      ],
+      [
+        54,
+        30,
+        1,
+        33,
+        0,
+        "CLIP"
+      ],
+      [
+        55,
+        33,
+        0,
+        31,
+        2,
+        "CONDITIONING"
+      ],
+      [
+        56,
+        6,
+        0,
+        35,
+        0,
+        "CONDITIONING"
+      ],
+      [
+        57,
+        35,
+        0,
+        31,
+        1,
+        "CONDITIONING"
+      ],
+      [
+        62,
+        30,
+        2,
+        8,
+        1,
+        "VAE"
+      ],
+      [
+        63,
+        30,
+        0,
+        31,
+        0,
+        "MODEL"
+      ]
+    ],
+    "models": [
+      {
+        "directory": "checkpoints",
+        "name": "flux1-dev-fp8.safetensors",
+        "url": "https://huggingface.co/Comfy-Org/flux1-dev/resolve/main/flux1-dev-fp8.safetensors?download=true"
+      }
+    ],
+    "nodes": [
+      {
+        "flags": {},
+        "id": 35,
+        "inputs": [
+          {
+            "link": 56,
+            "name": "conditioning",
+            "type": "CONDITIONING"
+          }
+        ],
+        "mode": 0,
+        "order": 6,
+        "outputs": [
+          {
+            "links": [
+              57
+            ],
+            "name": "CONDITIONING",
+            "shape": 3,
+            "slot_index": 0,
+            "type": "CONDITIONING"
+          }
+        ],
+        "pos": [
+          560,
+          -10
+        ],
+        "properties": {
+          "Node name for S\u0026R": "FluxGuidance",
+          "cnr_id": "comfy-core",
+          "ver": "0.3.23"
+        },
+        "size": [
+          211.60000610351562,
+          58
+        ],
+        "type": "FluxGuidance",
+        "widgets_values": [
+          3.5
+        ]
+      },
+      {
+        "bgcolor": "#533",
+        "color": "#322",
+        "flags": {
+          "collapsed": true
+        },
+        "id": 33,
+        "inputs": [
+          {
+            "link": 54,
+            "name": "clip",
+            "slot_index": 0,
+            "type": "CLIP"
+          }
+        ],
+        "mode": 0,
+        "order": 5,
+        "outputs": [
+          {
+            "links": [
+              55
+            ],
+            "name": "CONDITIONING",
+            "slot_index": 0,
+            "type": "CONDITIONING"
+          }
+        ],
+        "pos": [
+          250,
+          220
+        ],
+        "properties": {
+          "Node name for S\u0026R": "CLIPTextEncode",
+          "cnr_id": "comfy-core",
+          "ver": "0.3.23"
+        },
+        "size": [
+          285.6000061035156,
+          88
+        ],
+        "title": "CLIP Text Encode (Negative Prompt)",
+        "type": "CLIPTextEncode",
+        "widgets_values": [
+          ""
+        ]
+      },
+      {
+        "bgcolor": "#653",
+        "color": "#432",
+        "flags": {},
+        "id": 34,
+        "inputs": [],
+        "mode": 0,
+        "order": 0,
+        "outputs": [],
+        "pos": [
+          790,
+          300
+        ],
+        "properties": {
+          "text": ""
+        },
+        "size": [
+          280,
+          110
+        ],
+        "type": "Note",
+        "widgets_values": [
+          "Note that Flux dev and schnell do not have any negative prompt so CFG should be set to 1.0. Setting CFG to 1.0 means the negative prompt is ignored."
+        ]
+      },
+      {
+        "flags": {},
+        "id": 8,
+        "inputs": [
+          {
+            "link": 52,
+            "name": "samples",
+            "type": "LATENT"
+          },
+          {
+            "link": 62,
+            "name": "vae",
+            "type": "VAE"
+          }
+        ],
+        "mode": 0,
+        "order": 8,
+        "outputs": [
+          {
+            "links": [
+              9
+            ],
+            "name": "IMAGE",
+            "slot_index": 0,
+            "type": "IMAGE"
+          }
+        ],
+        "pos": [
+          1100,
+          -10
+        ],
+        "properties": {
+          "Node name for S\u0026R": "VAEDecode",
+          "cnr_id": "comfy-core",
+          "ver": "0.3.23"
+        },
+        "size": [
+          210,
+          46
+        ],
+        "type": "VAEDecode",
+        "widgets_values": []
+      },
+      {
+        "bgcolor": "#535",
+        "color": "#323",
+        "flags": {},
+        "id": 27,
+        "inputs": [],
+        "mode": 0,
+        "order": 1,
+        "outputs": [
+          {
+            "links": [
+              51
+            ],
+            "name": "LATENT",
+            "shape": 3,
+            "slot_index": 0,
+            "type": "LATENT"
+          }
+        ],
+        "pos": [
+          250,
+          270
+        ],
+        "properties": {
+          "Node name for S\u0026R": "EmptySD3LatentImage",
+          "cnr_id": "comfy-core",
+          "ver": "0.3.23"
+        },
+        "size": [
+          280,
+          110
+        ],
+        "type": "EmptySD3LatentImage",
+        "widgets_values": [
+          1024,
+          1024,
+          1
+        ]
+      },
+      {
+        "bgcolor": "#653",
+        "color": "#432",
+        "flags": {},
+        "id": 37,
+        "inputs": [],
+        "mode": 0,
+        "order": 2,
+        "outputs": [],
+        "pos": [
+          -90,
+          130
+        ],
+        "properties": {},
+        "size": [
+          225,
+          88
+        ],
+        "type": "MarkdownNote",
+        "widgets_values": [
+          "🛈 [Learn more about this workflow](https://docs.comfy.org/tutorials/flux/flux-text-to-image)"
+        ]
+      },
+      {
+        "bgcolor": "#533",
+        "color": "#322",
+        "flags": {},
+        "id": 30,
+        "inputs": [],
+        "mode": 0,
+        "order": 3,
+        "outputs": [
+          {
+            "links": [
+              63
+            ],
+            "name": "MODEL",
+            "shape": 3,
+            "slot_index": 0,
+            "type": "MODEL"
+          },
+          {
+            "links": [
+              45,
+              54
+            ],
+            "name": "CLIP",
+            "shape": 3,
+            "slot_index": 1,
+            "type": "CLIP"
+          },
+          {
+            "links": [
+              62
+            ],
+            "name": "VAE",
+            "shape": 3,
+            "slot_index": 2,
+            "type": "VAE"
+          }
+        ],
+        "pos": [
+          -90,
+          -10
+        ],
+        "properties": {
+          "Node name for S\u0026R": "CheckpointLoaderSimple",
+          "cnr_id": "comfy-core",
+          "ver": "0.3.23"
+        },
+        "size": [
+          315,
+          98
+        ],
+        "type": "CheckpointLoaderSimple",
+        "widgets_values": [
+          "flux1-dev-fp8.safetensors"
+        ]
+      },
+      {
+        "flags": {},
+        "id": 9,
+        "inputs": [
+          {
+            "link": 9,
+            "name": "images",
+            "type": "IMAGE"
+          }
+        ],
+        "mode": 0,
+        "order": 9,
+        "outputs": [],
+        "pos": [
+          1325.20068359375,
+          -19.110849380493164
+        ],
+        "properties": {
+          "cnr_id": "comfy-core",
+          "ver": "0.3.23"
+        },
+        "size": [
+          270,
+          280
+        ],
+        "type": "SaveImage",
+        "widgets_values": [
+          "ComfyUI"
+        ]
+      },
+      {
+        "flags": {},
+        "id": 31,
+        "inputs": [
+          {
+            "link": 63,
+            "name": "model",
+            "type": "MODEL"
+          },
+          {
+            "link": 57,
+            "name": "positive",
+            "type": "CONDITIONING"
+          },
+          {
+            "link": 55,
+            "name": "negative",
+            "type": "CONDITIONING"
+          },
+          {
+            "link": 51,
+            "name": "latent_image",
+            "type": "LATENT"
+          }
+        ],
+        "mode": 0,
+        "order": 7,
+        "outputs": [
+          {
+            "links": [
+              52
+            ],
+            "name": "LATENT",
+            "shape": 3,
+            "slot_index": 0,
+            "type": "LATENT"
+          }
+        ],
+        "pos": [
+          790,
+          -10
+        ],
+        "properties": {
+          "Node name for S\u0026R": "KSampler",
+          "cnr_id": "comfy-core",
+          "ver": "0.3.23"
+        },
+        "size": [
+          280,
+          262
+        ],
+        "type": "KSampler",
+        "widgets_values": [
+          570043048455009,
+          "randomize",
+          20,
+          1,
+          "euler",
+          "simple",
+          1
+        ]
+      },
+      {
+        "bgcolor": "#353",
+        "color": "#232",
+        "flags": {},
+        "id": 6,
+        "inputs": [
+          {
+            "link": 45,
+            "name": "clip",
+            "type": "CLIP"
+          }
+        ],
+        "mode": 0,
+        "order": 4,
+        "outputs": [
+          {
+            "links": [
+              56
+            ],
+            "name": "CONDITIONING",
+            "slot_index": 0,
+            "type": "CONDITIONING"
+          }
+        ],
+        "pos": [
+          250,
+          -10
+        ],
+        "properties": {
+          "Node name for S\u0026R": "CLIPTextEncode",
+          "cnr_id": "comfy-core",
+          "ver": "0.3.23"
+        },
+        "size": [
+          285.6000061035156,
+          180
+        ],
+        "title": "CLIP Text Encode (Positive Prompt)",
+        "type": "CLIPTextEncode",
+        "widgets_values": [
+          "A centered composition of a magical fairy-tale scene featuring a 3 year old girl with curly golden hair facing the camera. She wears an elegant green dress with lace and has shimmering butterfly wings. The lavishly decorated interior includes baroque-style wallpaper, intricate ceiling moldings, and a large arched window letting in gentle sunlight. Magical crystal stones are embedded in the walls and floor, adding a touch of magic and mystery. An antique wooden table with fresh flowers adds vibrancy to the room. Dreamy color palette from pastel greens to soft golds. Central focus on the girl with balanced elements. The scene is rendered in ultra-high definition, with cinematic lighting, rich details, and realistic textures to create a movie-quality visual experience."
+        ]
+      }
+    ],
+    "version": 0.4
+  }
+}
