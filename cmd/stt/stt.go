@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/base64"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -19,9 +18,10 @@ import (
 )
 
 var (
-	flagForce    bool
-	flagModel    string
-	flagModelKey string
+	flagForce       bool
+	flagTemperature float64
+	flagModel       string
+	flagModelKey    string
 )
 
 // sttCmd represents the stt command
@@ -44,6 +44,7 @@ Requires the GEMINI_API_KEY environment variable to be set.`,
 func init() {
 	cmd.RootCmd.AddCommand(sttCmd)
 	sttCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Overwrite existing .txt transcript files")
+	sttCmd.Flags().Float64VarP(&flagTemperature, "temperature", "T", 0.4, constants.HELP_TEMPERATURE_FLAG)
 	sttCmd.Flags().StringVarP(&flagModel, "model", "", "", "The model to use. "+constants.HELP_MODEL)
 	sttCmd.Flags().StringVarP(&flagModelKey, "model-key", "", "", constants.HELP_MODEL_KEY)
 }
@@ -53,9 +54,6 @@ func stt(cmd *cobra.Command, args []string) error {
 		flagModel = config.GetDefaultModel()
 	}
 	argDir := args[0]
-	if !strings.HasPrefix(flagModel, llm.GEMINI_MODEL_PREFIX) {
-		return fmt.Errorf("only Gemini model can be used")
-	}
 	log.Printf("Using model: %s", flagModel)
 
 	// Read all files in the directory
@@ -128,35 +126,17 @@ func stt(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// getTranscript calls the Gemini API with retry logic
-func getTranscript(apiKey, modelName string, audioData []byte, mimeType string) (string, error) {
-	// 1. Base64 encode the audio
-	encodedData := base64.StdEncoding.EncodeToString(audioData)
+const PROMPT = "Generate a transcript of this audio. Only output the transcribed text in it's original language."
 
-	// 2. Prepare the request body
-	reqBody := &llm.GeminiRequest{
-		Contents: []llm.Content{
-			{
-				Parts: []llm.Part{
-					{Text: "Generate a transcript of this audio. Only output the transcribed text."},
-					{InlineData: &llm.InlineData{
-						MimeType: mimeType,
-						Data:     encodedData,
-					}},
-				},
-			},
-		},
-	}
-	var lastErr error
+// getTranscript calls the Gemini API with retry logic
+func getTranscript(apiKey, modelName string, audioData []byte, mimeType string) (transcript string, err error) {
 	for attempt := range 5 {
-		geminiRes, err := llm.Gemini(apiKey, modelName, reqBody)
+		transcript, err = llm.ImageToText(apiKey, modelName, PROMPT, audioData, mimeType, flagTemperature)
 		if err == nil {
-			transcript := geminiRes.Candidates[0].Content.Parts[0].Text
 			return transcript, nil
 		}
-		wait := util.CalculateBackoff(llm.GeminiApiBaseBackoff, llm.GeminiApiMaxBackoff, attempt)
 		if util.IsTemporaryError(err) {
-			lastErr = fmt.Errorf("request failed: %w", err)
+			wait := util.CalculateBackoff(llm.GeminiApiBaseBackoff, llm.GeminiApiMaxBackoff, attempt)
 			log.Printf("Attempt %d: error (%v). Retrying in %v...", attempt, err, wait)
 			time.Sleep(wait)
 			continue
@@ -164,6 +144,5 @@ func getTranscript(apiKey, modelName string, audioData []byte, mimeType string) 
 			return "", err
 		}
 	}
-	// If loop finishes, all retries failed
-	return "", fmt.Errorf("all attempts failed. Last error: %w", lastErr)
+	return "", fmt.Errorf("all attempts failed. Last error: %w", err)
 }

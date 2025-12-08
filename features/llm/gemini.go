@@ -26,10 +26,9 @@ const (
 	GeminiApiMaxBackoff  = 60 * time.Second
 )
 
-// 2. API Request Structures (Nested structure for Gemini API)
 type GeminiRequest struct {
 	Contents         []Content         `json:"contents"`
-	GenerationConfig *GenerationConfig `json:"generationConfig"`
+	GenerationConfig *GenerationConfig `json:"generationConfig,omitempty"`
 }
 
 type Content struct {
@@ -48,9 +47,9 @@ type Part struct {
 }
 
 type GenerationConfig struct {
-	ResponseMimeType   string             `json:"responseMimeType"`
-	ResponseJsonSchema *jsonschema.Schema `json:"responseJsonSchema"`
-	Temperature        float64            `json:"temperature"` // Higher = more creative
+	ResponseMimeType   string             `json:"responseMimeType,omitempty"`
+	ResponseJsonSchema *jsonschema.Schema `json:"responseJsonSchema,omitempty"`
+	Temperature        float64            `json:"temperature"`
 }
 
 type GeminiResponse struct {
@@ -125,14 +124,14 @@ func Gemini(apiKey string, model string, reqBody *GeminiRequest) (*GeminiRespons
 // that conforms to the schema of type T.
 // It returns a pointer to the unmarshalled JSON object of type T.
 // T must be a struct type.
-func GeminiJsonResponse[T any](apiKey string, model string, promptText string) (*T, error) {
+func GeminiJsonResponse[T any](apiKey string, model string, promptText string, temperature float64) (*T, error) {
 	schema := jsonschema.Reflect(new(T))
 	reqBody := &GeminiRequest{
 		Contents: []Content{{Parts: []Part{{Text: promptText}}}},
 		GenerationConfig: &GenerationConfig{
 			ResponseMimeType:   "application/json",
 			ResponseJsonSchema: schema,
-			Temperature:        1.0, // Higher: more creativity
+			Temperature:        temperature,
 		},
 	}
 
@@ -153,9 +152,12 @@ func GeminiJsonResponse[T any](apiKey string, model string, promptText string) (
 }
 
 // Simplest one-shot chat
-func GeminiChat(apiKey string, model string, promptText string) (string, error) {
+func GeminiChat(apiKey string, model string, promptText string, temperature float64) (string, error) {
 	reqBody := &GeminiRequest{
 		Contents: []Content{{Parts: []Part{{Text: promptText}}}},
+		GenerationConfig: &GenerationConfig{
+			Temperature: temperature,
+		},
 	}
 	apiResp, err := Gemini(apiKey, model, reqBody)
 	if err != nil {
@@ -167,9 +169,12 @@ func GeminiChat(apiKey string, model string, promptText string) (string, error) 
 // GeminiImageToText sends an image and a text prompt to Gemini and returns the text response.
 // supported mimeTypes: "image/png", "image/jpeg", "image/webp", "image/heic", "image/heif"
 func GeminiImageToText(apiKey string, model string, promptText string,
-	imageBytes []byte, mimeType string) (string, error) {
+	imageBytes []byte, mimeType string, temperature float64) (string, error) {
 	// 1. Encode image to Base64
 	b64Data := base64.StdEncoding.EncodeToString(imageBytes)
+	if mimeType == "" {
+		mimeType = http.DetectContentType(imageBytes)
+	}
 
 	// 2. Construct Request
 	reqBody := &GeminiRequest{
@@ -188,7 +193,7 @@ func GeminiImageToText(apiKey string, model string, promptText string,
 			},
 		},
 		GenerationConfig: &GenerationConfig{
-			Temperature: 0.4, // Lower temperature for more descriptive/accurate results
+			Temperature: temperature,
 		},
 	}
 
@@ -203,12 +208,16 @@ func GeminiImageToText(apiKey string, model string, promptText string,
 
 // GeminiImageToJson sends an image and a text prompt to Gemini and enforces a JSON response
 // that conforms to the schema of type T.
-func GeminiImageToJson[T any](apiKey string, model string, promptText string, imageBytes []byte, mimeType string) (*T, error) {
+func GeminiImageToJson[T any](apiKey string, model string, promptText string,
+	imageBytes []byte, mimeType string, temperature float64) (*T, error) {
 	// 1. Generate Schema
 	schema := jsonschema.Reflect(new(T))
 
 	// 2. Encode Image
 	b64Data := base64.StdEncoding.EncodeToString(imageBytes)
+	if mimeType == "" {
+		mimeType = http.DetectContentType(imageBytes)
+	}
 
 	// 3. Construct Request with Image AND Schema
 	reqBody := &GeminiRequest{
@@ -229,7 +238,7 @@ func GeminiImageToJson[T any](apiKey string, model string, promptText string, im
 		GenerationConfig: &GenerationConfig{
 			ResponseMimeType:   "application/json",
 			ResponseJsonSchema: schema,
-			Temperature:        0.4,
+			Temperature:        temperature,
 		},
 	}
 

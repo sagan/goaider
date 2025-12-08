@@ -58,23 +58,25 @@ Resume Example:
 }
 
 var (
-	flagForce      bool
-	flagNoPrompt   bool
-	flagBatch      int
-	flagWorkflow   string
-	flagInput      string
-	flagOutput     string
-	flagModel      string
-	flagModelKey   string
-	flagPromptTmpl string
-	flagResume     string
-	flagServer     []string
-	flagVars       []string
+	flagForce       bool
+	flagNoPrompt    bool
+	flagBatch       int
+	flagTemperature float64
+	flagWorkflow    string
+	flagInput       string
+	flagOutput      string
+	flagModel       string
+	flagModelKey    string
+	flagPromptTmpl  string
+	flagResume      string
+	flagServer      []string
+	flagVars        []string
 )
 
 func init() {
 	batchI2VCmd.Flags().BoolVar(&flagForce, "force", false, "Force overwrite existing videos")
 	batchI2VCmd.Flags().IntVarP(&flagBatch, "batch", "b", 1, "Number of variations to generate per image")
+	batchI2VCmd.Flags().Float64VarP(&flagTemperature, "temperature", "T", 1.2, constants.HELP_TEMPERATURE_FLAG)
 	batchI2VCmd.Flags().StringVarP(&flagWorkflow, "workflow", "w", "", "(Required) Workflow JSON file")
 	batchI2VCmd.Flags().StringVarP(&flagInput, "input", "i", "", "(Required) Directory containing input images")
 	batchI2VCmd.Flags().StringVarP(&flagOutput, "output", "o", "", "(Required) Directory to save generated videos")
@@ -302,6 +304,7 @@ func processI2V(ctx context.Context, pool chan *api.Client, task i2vTask) error 
 				flagPromptTmpl, // Template should instruct to fill the JSON fields
 				imgData,
 				mimeType,
+				flagTemperature,
 			)
 			log.Printf("llm request %s, err=%v, response: %s", flagPromptTmpl, lErr, util.ToJson(llmResp))
 			return lErr

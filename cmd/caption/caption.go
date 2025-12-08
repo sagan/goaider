@@ -39,10 +39,11 @@ Bad example: "young girl, pink puffer jacket, fur collar, black pants, slippers,
 )
 
 var (
-	flagForce    bool
-	flagIdentity string
-	flagModel    string
-	flagModelKey string
+	flagForce       bool
+	flagTemperature float64
+	flagIdentity    string
+	flagModel       string
+	flagModelKey    string
 )
 
 var captionCmd = &cobra.Command{
@@ -61,6 +62,7 @@ func init() {
 	cmd.RootCmd.AddCommand(captionCmd)
 	captionCmd.Flags().BoolVarP(&flagForce, "force", "", false,
 		"Optional: Force re-generation of all captions, even if .txt files exist")
+	captionCmd.Flags().Float64VarP(&flagTemperature, "temperature", "T", 0.4, constants.HELP_TEMPERATURE_FLAG)
 	captionCmd.Flags().StringVarP(&flagIdentity, "identity", "", "",
 		"Optional: The trigger word (e.g., 'foobar' or 'photo of foobar') to prepend to each caption")
 	captionCmd.Flags().StringVarP(&flagModel, "model", "", "", "The model to use. "+constants.HELP_MODEL)
@@ -96,7 +98,7 @@ func caption(cmd *cobra.Command, args []string) error {
 			continue
 		}
 		fullPath := filepath.Join(argDir, file.Name())
-		err := processImage(fullPath, mimeType, flagModelKey, flagForce, flagIdentity)
+		err := processImage(fullPath, mimeType, flagTemperature, flagModelKey, flagForce, flagIdentity)
 		if err != nil {
 			fmt.Printf("Processing %s: ❌ FAILED (%v)\n", file.Name(), err)
 			errorCnt++
@@ -117,7 +119,8 @@ func caption(cmd *cobra.Command, args []string) error {
  * 4. Prepends identity (if provided)
  * 5. Saves the caption to a .txt file
  */
-func processImage(imagePath string, mimeType string, apiKey string, force bool, identity string) (err error) {
+func processImage(imagePath string, mimeType string, temperature float64,
+	apiKey string, force bool, identity string) (err error) {
 	// 1. Check for existing .txt file before doing any work
 	baseName := filepath.Base(imagePath)
 	ext := filepath.Ext(baseName)
@@ -140,7 +143,7 @@ func processImage(imagePath string, mimeType string, apiKey string, force bool, 
 
 	var caption string
 	for retries := range maxRetries {
-		caption, err = llm.ImageToText(apiKey, flagModel, captionPrompt, imageData, mimeType)
+		caption, err = llm.ImageToText(apiKey, flagModel, captionPrompt, imageData, mimeType, temperature)
 		if err == nil {
 			break
 		}

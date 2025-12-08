@@ -6,12 +6,13 @@ import (
 	"io"
 	"os"
 	"strings"
-	"unicode/utf8"
+
+	"github.com/spf13/cobra"
+	"github.com/vincent-petithory/dataurl"
 
 	"github.com/natefinch/atomic"
 	"github.com/sagan/goaider/cmd"
 	"github.com/sagan/goaider/util"
-	"github.com/spf13/cobra"
 )
 
 var base64encodeCmd = &cobra.Command{
@@ -59,31 +60,16 @@ func doBase64encode(cmd *cobra.Command, args []string) (err error) {
 	}
 
 	var encoded string
-	if flagUrl {
+	if flatDataUrl {
+		if flagMime != "" {
+			encoded = dataurl.New(input, flagMime).String()
+		} else {
+			encoded = dataurl.EncodeBytes(input)
+		}
+	} else if flagUrl {
 		encoded = base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(input)
 	} else {
 		encoded = base64.StdEncoding.EncodeToString(input)
-	}
-
-	if flatDataUrl {
-		mimeType := flagMime
-		if mimeType == "" {
-			if len(args) > 0 { // Assume text if input is from arg
-				mimeType = "text/plain"
-			} else if flagInput == "-" {
-				if utf8.Valid(input) {
-					mimeType = "text/plain"
-				} else {
-					mimeType = "application/octet-stream"
-				}
-			} else if flagInput != "" {
-				mimeType = util.GetMimeType(flagInput)
-			}
-			if mimeType == "" {
-				mimeType = "application/octet-stream"
-			}
-		}
-		encoded = fmt.Sprintf("data:%s;base64,%s", mimeType, encoded)
 	}
 
 	if flagOutput == "-" {

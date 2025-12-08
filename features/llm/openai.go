@@ -3,7 +3,6 @@ package llm
 import (
 	"bufio"
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -116,6 +115,8 @@ func getOpenAIApiKeyFromEnv(baseUrl string) (apiKey string, err error) {
 		if apiKey == "" {
 			err = fmt.Errorf("Gemini api key or %s env not set", constants.ENV_GEMINI_API_KEY)
 		}
+	default:
+		apiKey = os.Getenv(constants.ENV_MODEL_KEY)
 	}
 	return apiKey, err
 }
@@ -279,11 +280,11 @@ func CallOpenAIStream(baseUrl, apiKey string, reqBody *OpenAIChatRequest,
 }
 
 // OpenAIChat performs a simple text-in, text-out conversation.
-func OpenAIChat(baseUrl string, apiKey string, model string, promptText string) (string, error) {
+func OpenAIChat(baseUrl string, apiKey string, model string, promptText string, temperature float64) (string, error) {
 	reqBody := &OpenAIChatRequest{
 		Model:       model,
 		Messages:    []*OpenAIMessage{{Role: "user", Content: promptText}},
-		Temperature: 0.7,
+		Temperature: temperature,
 	}
 
 	resp, err := CallOpenAI(baseUrl, apiKey, reqBody)
@@ -306,18 +307,19 @@ func OpenAIChat(baseUrl string, apiKey string, model string, promptText string) 
 // OpenAIJsonResponse enforces a JSON Schema response.
 // Note: Not all "OpenAI compatible" endpoints support "response_format: json_schema".
 // This implementation uses the strict "json_schema" format standardized by OpenAI.
-func OpenAIJsonResponse[T any](baseUrl string, apiKey string, model string, promptText string) (*T, error) {
+func OpenAIJsonResponse[T any](baseUrl string, apiKey string, model string,
+	promptText string, temperature float64) (*T, error) {
 	schema := jsonschema.Reflect(new(T))
 
 	// OpenAI requires strict schema adherence
 	reqBody := &OpenAIChatRequest{
 		Model:       model,
 		Messages:    []*OpenAIMessage{{Role: "user", Content: promptText}},
-		Temperature: 0.2, // Lower temp for structured data
+		Temperature: temperature, // Lower temp for structured data
 		ResponseFormat: &OpenAIResponseFormat{
 			Type: "json_schema",
 			JsonSchema: &OpenAIJsonSchema{
-				Name:   "result_schema",
+				Name:   "response_schema",
 				Schema: schema,
 				Strict: true,
 			},
@@ -344,17 +346,23 @@ func OpenAIJsonResponse[T any](baseUrl string, apiKey string, model string, prom
 
 // OpenAIImageToText handles Vision capabilities.
 func OpenAIImageToText(apiKey string, baseUrl string, model string, promptText string,
-	imageBytes []byte, mimeType string) (string, error) {
-	// Construct multimodal message
+	imageBytes []byte, mimeType string, temperature float64) (string, error) {
+	dataUrl := ""
+	if mimeType != "" {
+		dataUrl = dataurl.New(imageBytes, mimeType).String()
+	} else {
+		dataUrl = dataurl.EncodeBytes(imageBytes)
+	}
+
 	contentParts := []OpenAIContentPart{
 		{Type: "text", Text: promptText},
-		{Type: "image_url", ImageUrl: &OpenAIImageUrl{Url: dataurl.EncodeBytes(imageBytes)}},
+		{Type: "image_url", ImageUrl: &OpenAIImageUrl{Url: dataUrl}},
 	}
 
 	reqBody := &OpenAIChatRequest{
 		Model:       model,
 		Messages:    []*OpenAIMessage{{Role: "user", Content: contentParts}},
-		Temperature: 0.4,
+		Temperature: temperature,
 	}
 
 	resp, err := CallOpenAI(baseUrl, apiKey, reqBody)
@@ -371,11 +379,15 @@ func OpenAIImageToText(apiKey string, baseUrl string, model string, promptText s
 
 // OpenAIImageToJson combines Vision and Structured Outputs.
 func OpenAIImageToJson[T any](baseUrl string, apiKey string, model string, promptText string,
-	imageBytes []byte, mimeType string) (*T, error) {
+	imageBytes []byte, mimeType string, temperature float64) (*T, error) {
 	schema := jsonschema.Reflect(new(T))
 
-	b64Data := base64.StdEncoding.EncodeToString(imageBytes)
-	dataUrl := fmt.Sprintf("data:%s;base64,%s", mimeType, b64Data)
+	dataUrl := ""
+	if mimeType != "" {
+		dataUrl = dataurl.New(imageBytes, mimeType).String()
+	} else {
+		dataUrl = dataurl.EncodeBytes(imageBytes)
+	}
 
 	contentParts := []OpenAIContentPart{
 		{Type: "text", Text: promptText},
@@ -385,7 +397,7 @@ func OpenAIImageToJson[T any](baseUrl string, apiKey string, model string, promp
 	reqBody := &OpenAIChatRequest{
 		Model:       model,
 		Messages:    []*OpenAIMessage{{Role: "user", Content: contentParts}},
-		Temperature: 0.4,
+		Temperature: temperature,
 		ResponseFormat: &OpenAIResponseFormat{
 			Type: "json_schema",
 			JsonSchema: &OpenAIJsonSchema{

@@ -44,80 +44,82 @@ func (a *ApiError) Unwrap() error {
 }
 
 // Wrapper of openai & gemini
-func ImageToJson[T any](apiKey string, model string, prompt string, imageBytes []byte, mimeType string) (*T, error) {
+func ImageToJson[T any](apiKey string, model string, prompt string, imageBytes []byte, mimeType string,
+	temperature float64) (*T, error) {
 	if strings.HasPrefix(model, GEMINI_MODEL_PREFIX) {
-		return GeminiImageToJson[T](apiKey, model, prompt, imageBytes, mimeType)
+		return GeminiImageToJson[T](apiKey, model, prompt, imageBytes, mimeType, temperature)
 	} else if isOpenAiModel(model) {
-		return OpenAIImageToJson[T](OPENAI_API_URL, apiKey, model, prompt, imageBytes, mimeType)
+		return OpenAIImageToJson[T](OPENAI_API_URL, apiKey, model, prompt, imageBytes, mimeType, temperature)
 	} else if openrouterModel, ok := strings.CutPrefix(model, OPENROUTER_MODEL_PREFIX); ok {
 		if !strings.ContainsRune(openrouterModel, '/') {
 			openrouterModel = OPENROUTER_MODEL_PREFIX + openrouterModel
 		}
-		return OpenAIImageToJson[T](OPENROUTER_API_URL, apiKey, openrouterModel, prompt, imageBytes, mimeType)
+		return OpenAIImageToJson[T](OPENROUTER_API_URL, apiKey, openrouterModel, prompt, imageBytes, mimeType, temperature)
 	} else if strings.HasPrefix(model, OPENAI_COMPATIBLE_MODEL_PREFIX) { // "openai/model-name/http://localhost:8080/v1"
 		parts := strings.SplitN(model, "/", 3)
 		if len(parts) == 3 {
-			return OpenAIImageToJson[T](parts[2], apiKey, parts[1], prompt, imageBytes, mimeType)
+			return OpenAIImageToJson[T](parts[2], apiKey, parts[1], prompt, imageBytes, mimeType, temperature)
 		}
 		return nil, fmt.Errorf("invalid openai model %s", model)
 	}
 	return nil, fmt.Errorf("unsupported model %s", model)
 }
 
-func ImageToText(apiKey string, model string, prompt string, imageBytes []byte, mimeType string) (string, error) {
+func ImageToText(apiKey string, model string, prompt string, imageBytes []byte, mimeType string,
+	temperature float64) (string, error) {
 	if strings.HasPrefix(model, GEMINI_API_URL) {
-		return GeminiImageToText(apiKey, model, prompt, imageBytes, mimeType)
+		return GeminiImageToText(apiKey, model, prompt, imageBytes, mimeType, temperature)
 	} else if isOpenAiModel(model) {
-		return OpenAIImageToText(OPENAI_API_URL, apiKey, model, prompt, imageBytes, mimeType)
+		return OpenAIImageToText(OPENAI_API_URL, apiKey, model, prompt, imageBytes, mimeType, temperature)
 	} else if openrouterModel, ok := strings.CutPrefix(model, OPENROUTER_MODEL_PREFIX); ok {
 		if !strings.ContainsRune(openrouterModel, '/') {
 			openrouterModel = OPENROUTER_MODEL_PREFIX + openrouterModel
 		}
-		return OpenAIImageToText(OPENROUTER_API_URL, apiKey, openrouterModel, prompt, imageBytes, mimeType)
+		return OpenAIImageToText(OPENROUTER_API_URL, apiKey, openrouterModel, prompt, imageBytes, mimeType, temperature)
 	} else if strings.HasPrefix(model, OPENAI_COMPATIBLE_MODEL_PREFIX) {
 		parts := strings.SplitN(model, "/", 3)
 		if len(parts) == 3 {
-			return OpenAIImageToText(parts[2], apiKey, parts[1], prompt, imageBytes, mimeType)
+			return OpenAIImageToText(parts[2], apiKey, parts[1], prompt, imageBytes, mimeType, temperature)
 		}
 		return "", fmt.Errorf("invalid openai model %s", model)
 	}
 	return "", fmt.Errorf("unsupported model %s", model)
 }
 
-func ChatJsonResponse[T any](apiKey string, model string, prompt string) (*T, error) {
+func ChatJsonResponse[T any](apiKey string, model string, prompt string, temperature float64) (*T, error) {
 	if strings.HasPrefix(model, GEMINI_MODEL_PREFIX) {
-		return GeminiJsonResponse[T](apiKey, model, prompt)
+		return GeminiJsonResponse[T](apiKey, model, prompt, temperature)
 	} else if isOpenAiModel(model) {
-		return OpenAIJsonResponse[T](OPENAI_API_URL, apiKey, model, prompt)
+		return OpenAIJsonResponse[T](OPENAI_API_URL, apiKey, model, prompt, temperature)
 	} else if openrouterModel, ok := strings.CutPrefix(model, OPENROUTER_MODEL_PREFIX); ok {
 		if !strings.ContainsRune(openrouterModel, '/') {
 			openrouterModel = OPENROUTER_MODEL_PREFIX + openrouterModel
 		}
-		return OpenAIJsonResponse[T](OPENROUTER_API_URL, apiKey, openrouterModel, prompt)
+		return OpenAIJsonResponse[T](OPENROUTER_API_URL, apiKey, openrouterModel, prompt, temperature)
 	} else if strings.HasPrefix(model, OPENAI_COMPATIBLE_MODEL_PREFIX) {
 		parts := strings.SplitN(model, "/", 3)
 		if len(parts) == 3 {
-			return OpenAIJsonResponse[T](parts[2], apiKey, parts[1], prompt)
+			return OpenAIJsonResponse[T](parts[2], apiKey, parts[1], prompt, temperature)
 		}
 		return nil, fmt.Errorf("invalid openai model %s", model)
 	}
 	return nil, fmt.Errorf("unsupported model %s", model)
 }
 
-func Chat(apiKey string, model string, prompt string) (string, error) {
+func Chat(apiKey string, model string, prompt string, temperature float64) (string, error) {
 	if strings.HasPrefix(model, GEMINI_MODEL_PREFIX) {
-		return GeminiChat(apiKey, model, prompt)
+		return GeminiChat(apiKey, model, prompt, temperature)
 	} else if isOpenAiModel(model) {
-		return OpenAIChat(OPENAI_API_URL, apiKey, model, prompt)
+		return OpenAIChat(OPENAI_API_URL, apiKey, model, prompt, temperature)
 	} else if openrouterModel, ok := strings.CutPrefix(model, OPENROUTER_MODEL_PREFIX); ok {
 		if !strings.ContainsRune(openrouterModel, '/') {
 			openrouterModel = OPENROUTER_MODEL_PREFIX + openrouterModel
 		}
-		return OpenAIChat(OPENROUTER_API_URL, apiKey, openrouterModel, prompt)
+		return OpenAIChat(OPENROUTER_API_URL, apiKey, openrouterModel, prompt, temperature)
 	} else if strings.HasPrefix(model, OPENAI_COMPATIBLE_MODEL_PREFIX) {
 		parts := strings.SplitN(model, "/", 3)
 		if len(parts) == 3 {
-			return OpenAIChat(parts[2], apiKey, parts[1], prompt)
+			return OpenAIChat(parts[2], apiKey, parts[1], prompt, temperature)
 		}
 		return "", fmt.Errorf("invalid openai model %s", model)
 	}

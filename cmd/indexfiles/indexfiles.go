@@ -18,6 +18,7 @@ import (
 )
 
 var (
+	flagNoHash     bool
 	flagForce      bool
 	flagPrefix     string
 	flagOutput     string
@@ -67,6 +68,7 @@ The outputed index only contains normal files, no folders.`,
 
 func init() {
 	cmd.RootCmd.AddCommand(indexfilesCmd)
+	indexfilesCmd.Flags().BoolVarP(&flagNoHash, "no-hash", "n", false, "Do not calculate SHA256 hash (faster)")
 	indexfilesCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Force overwriting without confirmation")
 	indexfilesCmd.Flags().StringVarP(&flagPrefix, "prefix", "", "", `Output data fields name prefix`)
 	indexfilesCmd.Flags().StringVarP(&flagOutput, "output", "o", "-", `Output file path. Use "-" for stdout`)
@@ -135,7 +137,7 @@ func indexfiles(cmd *cobra.Command, args []string) (err error) {
 		return fmt.Errorf("--includes flag has duplicate value(s)")
 	}
 
-	filelist, err := doIndex(inputDir, flagExtensions)
+	filelist, err := doIndex(inputDir, flagExtensions, flagNoHash)
 	if err != nil {
 		return err
 	}

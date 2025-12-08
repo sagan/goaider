@@ -1,13 +1,10 @@
 package indexfiles
 
 import (
-	"crypto/sha256"
 	"encoding/csv"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -289,7 +286,7 @@ func getDeepValue(data map[string]any, path string) string {
 
 // doIndex scans the directory recursively and returns a list of FileInfo
 // allowedExts: if not nil, only index these extension (no dot) files
-func doIndex(dir string, allowedExts []string) (filelist FileList, err error) {
+func doIndex(dir string, allowedExts []string, noHash bool) (filelist FileList, err error) {
 	filelist = make([]*FileInfo, 0)
 
 	err = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
@@ -345,10 +342,13 @@ func doIndex(dir string, allowedExts []string) (filelist FileList, err error) {
 		// 3. Time Metadata
 		mTime := info.ModTime()
 
-		// 4. Calculate SHA256
-		hash, err := calculateSha256(path)
-		if err != nil {
-			return err
+		hash := ""
+		if !noHash {
+			// 4. Calculate SHA256
+			hash, err = util.Sha256sumFile(path, true)
+			if err != nil {
+				return err
+			}
 		}
 
 		// 5. Populate Struct
@@ -372,20 +372,4 @@ func doIndex(dir string, allowedExts []string) (filelist FileList, err error) {
 	})
 
 	return filelist, err
-}
-
-// calculateSha256 opens the file and computes the hash
-func calculateSha256(filePath string) (string, error) {
-	f, err := os.Open(filePath)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return "", err
-	}
-
-	return hex.EncodeToString(h.Sum(nil)), nil
 }
