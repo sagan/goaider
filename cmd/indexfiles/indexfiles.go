@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -20,6 +21,7 @@ import (
 var (
 	flagNoHash     bool
 	flagForce      bool
+	flagParseMedia bool // parse media file meta info
 	flagPrefix     string
 	flagOutput     string
 	flagIncludes   []string
@@ -36,6 +38,9 @@ var indexfilesCmd = &cobra.Command{
 It outputs a csv with these columns (alphabetically sorted):
   base,dir_name,dir_path,ext,ext_nodot,mime,mtime,name,path,sha256,size
 
+Some additional columns:
+	- media info: media_width,media_height,media_duration
+
 The Go file info struct schema:
 
 type FileInfo struct {
@@ -51,6 +56,9 @@ type FileInfo struct {
 	Mtime    time.Time      // modified time. output to csv in "YYYY-MM-DDTHH:mm:ssZ" format
 	Sha256   string         // hex string (lower case)
 	Data     map[string]any // custom meta data
+	MediaWidth    int       // media file width
+	MediaHeight   int       // media file height
+	MediaDuration string    // media file duration (seconds)
 }
 
 By default, the "data" field is empty map and not outputed to csv, unless the --include flag is set and
@@ -68,6 +76,8 @@ The outputed index only contains normal files, no folders.`,
 
 func init() {
 	cmd.RootCmd.AddCommand(indexfilesCmd)
+	indexfilesCmd.Flags().BoolVarP(&flagParseMedia, "parse-media", "", false,
+		`Parse media file meta info (width, height, duration). Requires "ffprobe" in path`)
 	indexfilesCmd.Flags().BoolVarP(&flagNoHash, "no-hash", "n", false, "Do not calculate SHA256 hash (faster)")
 	indexfilesCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Force overwriting without confirmation")
 	indexfilesCmd.Flags().StringVarP(&flagPrefix, "prefix", "", "", `Output data fields name prefix`)
@@ -98,6 +108,13 @@ func indexfiles(cmd *cobra.Command, args []string) (err error) {
 	inputDir, err := filepath.Abs(argInput)
 	if err != nil {
 		return err
+	}
+	if flagParseMedia {
+		log.Debug("Parsing media info enabled. Checking ffprobe availability...")
+		if _, err := exec.LookPath("ffprobe"); err != nil {
+			return fmt.Errorf("ffprobe not found in PATH. Please install ffmpeg/ffprobe to use --parse-media flag: %w", err)
+		}
+		log.Debug("ffprobe found.")
 	}
 
 	// metaName => metaSuffix
@@ -137,7 +154,7 @@ func indexfiles(cmd *cobra.Command, args []string) (err error) {
 		return fmt.Errorf("--includes flag has duplicate value(s)")
 	}
 
-	filelist, err := doIndex(inputDir, flagExtensions, flagNoHash)
+	filelist, err := doIndex(inputDir, flagExtensions, flagNoHash, flagParseMedia)
 	if err != nil {
 		return err
 	}

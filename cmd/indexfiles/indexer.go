@@ -13,24 +13,29 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sagan/goaider/features/mediainfo"
 	"github.com/sagan/goaider/util"
+	log "github.com/sirupsen/logrus"
 )
 
 // name,base,ext,size,sha256
 
 type FileInfo struct {
-	Path     string         `json:"path"`      // full relative path, "foo/bar/baz.wav"
-	Name     string         `json:"name"`      // filename, "baz.wav"
-	DirPath  string         `json:"dir_path"`  // parent dir relative path, "foo/bar", empty if file is in root path
-	DirName  string         `json:"dir_name"`  // parent dir name, "bar", empty if file is in root path
-	Base     string         `json:"base"`      // "baz"
-	Ext      string         `json:"ext"`       // ".wav"
-	ExtNodot string         `json:"ext_nodot"` // "wav"
-	Mime     string         `json:"mime"`      // "audio/wav", empty if unknown
-	Size     int64          `json:"size"`      // Changed from int to int64 to match os.FileInfo
-	Mtime    time.Time      `json:"mtime"`     // modified time
-	Sha256   string         `json:"sha256"`    // hex string (lower case)
-	Data     map[string]any `json:"data"`      // custom meta data
+	Path          string         `json:"path"`           // full relative path, "foo/bar/baz.wav"
+	Name          string         `json:"name"`           // filename, "baz.wav"
+	DirPath       string         `json:"dir_path"`       // parent dir relative path, "foo/bar", empty if file is in root path
+	DirName       string         `json:"dir_name"`       // parent dir name, "bar", empty if file is in root path
+	Base          string         `json:"base"`           // "baz"
+	Ext           string         `json:"ext"`            // ".wav"
+	ExtNodot      string         `json:"ext_nodot"`      // "wav"
+	Mime          string         `json:"mime"`           // "audio/wav", empty if unknown
+	Size          int64          `json:"size"`           // Changed from int to int64 to match os.FileInfo
+	Mtime         time.Time      `json:"mtime"`          // modified time
+	Sha256        string         `json:"sha256"`         // hex string (lower case)
+	Data          map[string]any `json:"data"`           // custom meta data
+	MediaWidth    int            `json:"media_width"`    // media file width
+	MediaHeight   int            `json:"media_height"`   // media file height
+	MediaDuration string         `json:"media_duration"` // media file duration (seconds)
 }
 
 type FileList []*FileInfo
@@ -286,7 +291,7 @@ func getDeepValue(data map[string]any, path string) string {
 
 // doIndex scans the directory recursively and returns a list of FileInfo
 // allowedExts: if not nil, only index these extension (no dot) files
-func doIndex(dir string, allowedExts []string, noHash bool) (filelist FileList, err error) {
+func doIndex(dir string, allowedExts []string, noHash bool, parseMedia bool) (filelist FileList, err error) {
 	filelist = make([]*FileInfo, 0)
 
 	err = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
@@ -365,6 +370,17 @@ func doIndex(dir string, allowedExts []string, noHash bool) (filelist FileList, 
 			Mtime:    mTime,
 			Sha256:   hash,
 			Data:     map[string]any{},
+		}
+
+		if parseMedia {
+			mediaInfo, err := mediainfo.ParseMediaInfo(path)
+			if err != nil {
+				log.Warnf("Warning: Could not parse media info for %s: %v\n", path, err)
+			} else if mediaInfo != nil {
+				fi.MediaWidth = mediaInfo.Width
+				fi.MediaHeight = mediaInfo.Height
+				fi.MediaDuration = mediaInfo.Duration
+			}
 		}
 
 		filelist = append(filelist, fi)

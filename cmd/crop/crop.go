@@ -17,10 +17,11 @@ import (
 
 // Flag variables to store command line arguments
 var (
-	flagOutputDir string
+	flagForce     bool
+	flagCenter    bool // Crop the center of the image, do not use smartcrop
 	flagWidth     int
 	flagHeight    int
-	flagForce     bool
+	flagOutputDir string
 )
 
 var cropCmd = &cobra.Command{
@@ -35,12 +36,14 @@ It crops images using smartcrop ( https://github.com/muesli/smartcrop ).`,
 
 func init() {
 	cmd.RootCmd.AddCommand(cropCmd)
-	cropCmd.Flags().StringVarP(&flagOutputDir, "output", "o", "",
-		`Optional: output dir name. default to "<input-dir>-crop"`)
-	cropCmd.Flags().IntVarP(&flagWidth, "width", "", 1024, "Optional: target photo width")
-	cropCmd.Flags().IntVarP(&flagHeight, "height", "", 1024, "Optional: target photo height")
 	cropCmd.Flags().BoolVarP(&flagForce, "force", "", false,
 		"Optional: Process and generate the target output file even if the file already exists")
+	cropCmd.Flags().BoolVarP(&flagCenter, "center", "", false,
+		"Optional: Crop the center of the image, do not use smartcrop")
+	cropCmd.Flags().IntVarP(&flagWidth, "width", "", 1024, "Optional: target photo width")
+	cropCmd.Flags().IntVarP(&flagHeight, "height", "", 1024, "Optional: target photo height")
+	cropCmd.Flags().StringVarP(&flagOutputDir, "output", "o", "",
+		`Optional: output dir name. default to "<input-dir>-crop"`)
 }
 
 func crop(cmd *cobra.Command, args []string) error {
@@ -109,7 +112,7 @@ func (r resizer) Resize(img image.Image, width, height uint) image.Image {
 	return imaging.Resize(img, int(width), int(height), imaging.Lanczos)
 }
 
-func processImageFile(inputPath, outputPath string, width, height int) error {
+func processImageFile(inputPath, outputPath string, width, height int) (err error) {
 	file, err := os.Open(inputPath)
 	if err != nil {
 		return err
@@ -166,10 +169,20 @@ func processImageFile(inputPath, outputPath string, width, height int) error {
 		cropHeight = int(float64(imgWidth) / targetRatio)
 	}
 
-	analyzer := smartcrop.NewAnalyzer(resizer{})
-	topCrop, err := analyzer.FindBestCrop(img, cropWidth, cropHeight)
-	if err != nil {
-		return err
+	var topCrop image.Rectangle
+	if flagCenter {
+		topCrop = image.Rect(
+			(imgWidth-cropWidth)/2,
+			(imgHeight-cropHeight)/2,
+			(imgWidth+cropWidth)/2,
+			(imgHeight+cropHeight)/2,
+		)
+	} else {
+		analyzer := smartcrop.NewAnalyzer(resizer{})
+		topCrop, err = analyzer.FindBestCrop(img, cropWidth, cropHeight)
+		if err != nil {
+			return err
+		}
 	}
 
 	type subImager interface {
