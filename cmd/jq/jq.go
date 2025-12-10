@@ -25,6 +25,7 @@ var jqCmd = &cobra.Command{
 If {file.json} is "-", read from stdin.
 It outputs to stdout by default.`,
 	RunE: doJq,
+	Args: cobra.ExactArgs(1),
 }
 
 var (

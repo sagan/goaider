@@ -14,10 +14,32 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sagan/goaider/constants"
 	"github.com/sagan/goaider/features/mediainfo"
 	"github.com/sagan/goaider/util"
 	log "github.com/sirupsen/logrus"
 )
+
+//
+// IgnoreFilenames and IgnoreFilenameSuffixes are used to skip certain files during indexing.
+// These are common temporary or system-generated files that are usually not relevant for indexing.
+
+var IgnoreFilenames = []string{
+	".DS_Store",   // macOS directory metadata
+	"Thumbs.db",   // Windows thumbnail cache
+	"desktop.ini", // Windows folder customization
+}
+
+var IgnoreFilenameSuffixes = []string{
+	".partial",     // rclone transfer temporary file
+	".fuse_hidden", // fuse filesystem temporary file
+	".crdownload",  // Chrome partial download
+	".part",        // Firefox partial download
+	".tmp",         // Temporary file
+	".localized",   // macOS localization marker
+	".aria2",       // aria2 downloading file
+	".!qB",         // qBittorrent downloading file
+}
 
 // name,base,ext,size,sha256
 
@@ -32,12 +54,15 @@ type FileInfo struct {
 	Mime           string         `json:"mime"`            // "audio/wav", empty if unknown
 	Size           int64          `json:"size"`            // Changed from int to int64 to match os.FileInfo
 	Mtime          time.Time      `json:"mtime"`           // modified time
+	Mdate          string         `json:"mdate"`           // modified date, "2006-01-02"
 	Sha256         string         `json:"sha256"`          // hex string (lower case)
 	Data           map[string]any `json:"data"`            // custom meta data
 	MediaWidth     int            `json:"media_width"`     // media file width
 	MediaHeight    int            `json:"media_height"`    // media file height
 	MediaDuration  string         `json:"media_duration"`  // media file duration (seconds)
 	MediaSignature string         `json:"media_signature"` // image signature (sha256 of pixel data)
+	MediaCtime     time.Time      `json:"media_ctime"`     // photo / video creation_time from EXIF / meta
+	MediaCdate     string         `json:"media_cdate"`     // photo / video creation date, "2006-01-02"
 }
 
 type FileList []*FileInfo
@@ -207,8 +232,12 @@ func formatValue(v reflect.Value) string {
 		// Rule 4: Handle time.Time
 		if v.Type() == reflect.TypeOf(time.Time{}) {
 			t := v.Interface().(time.Time)
+			// ignore empty value time
+			if t.Equal((time.Time{})) {
+				return ""
+			}
 			// Format: "YYYY-MM-DDTHH:mm:ssZ"
-			return t.UTC().Format("2006-01-02T15:04:05Z")
+			return t.UTC().Format(constants.TIME_FORMAT)
 		}
 	}
 	return fmt.Sprintf("%v", v.Interface())
@@ -285,10 +314,25 @@ func getDeepValue(data map[string]any, path string) string {
 	case bool:
 		return strconv.FormatBool(val)
 	case time.Time:
-		return val.UTC().Format("2006-01-02T15:04:05Z")
+		return val.UTC().Format(constants.TIME_FORMAT)
 	default:
 		return util.ToJson(val)
 	}
+}
+
+func shouldIgnore(filename string) bool {
+	if strings.HasPrefix(filename, ".") {
+		return true
+	}
+	if slices.Contains(IgnoreFilenames, filename) {
+		return true
+	}
+	if slices.ContainsFunc(IgnoreFilenameSuffixes, func(suffix string) bool {
+		return strings.HasSuffix(filename, suffix)
+	}) {
+		return true
+	}
+	return false
 }
 
 // doIndex scans the directory recursively and returns a list of FileInfo
@@ -302,13 +346,13 @@ func doIndex(dir string, allowedExts []string, noHash bool, parseMedia bool) (fi
 			return err
 		}
 
-		// Skip directories and hidden files, we only index files
+		// Skip directories, hidden files and temporary or os files
 		if d.IsDir() {
-			if strings.HasPrefix(d.Name(), ".") {
+			if shouldIgnore(d.Name()) {
 				return filepath.SkipDir
 			}
 			return nil
-		} else if strings.HasPrefix(d.Name(), ".") {
+		} else if shouldIgnore(d.Name()) {
 			return nil
 		}
 
@@ -373,6 +417,9 @@ func doIndex(dir string, allowedExts []string, noHash bool, parseMedia bool) (fi
 			Sha256:   hash,
 			Data:     map[string]any{},
 		}
+		if !mTime.Equal(time.Time{}) {
+			fi.Mdate = mTime.UTC().Format(constants.DATE_FORMAT)
+		}
 
 		if parseMedia && fi.Size > 0 {
 			file, err := os.Open(path)
@@ -384,6 +431,10 @@ func doIndex(dir string, allowedExts []string, noHash bool, parseMedia bool) (fi
 					fi.MediaHeight = mediaInfo.Height
 					fi.MediaDuration = mediaInfo.Duration
 					fi.MediaSignature = mediaInfo.Signature
+					fi.MediaCtime = mediaInfo.Ctime
+					if !mediaInfo.Ctime.Equal(time.Time{}) {
+						fi.MediaCdate = mediaInfo.Ctime.UTC().Format(constants.DATE_FORMAT)
+					}
 				} else {
 					log.Warnf("Warning: Could not open file %s for media info parsing: %v\n", path, err)
 				}

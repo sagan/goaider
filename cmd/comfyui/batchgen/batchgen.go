@@ -113,7 +113,7 @@ func init() {
 	comfyui.ComfyuiCmd.AddCommand(batchGenCmd)
 }
 
-func doBatchGen(cmd *cobra.Command, args []string) error {
+func doBatchGen(cmd *cobra.Command, args []string) (err error) {
 	// 1. Setup Signal Handling for Graceful Shutdown / Resume Info
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -125,6 +125,11 @@ func doBatchGen(cmd *cobra.Command, args []string) error {
 		printResumeToken()
 		os.Exit(1)
 	}()
+
+	err = os.MkdirAll(flagOutput, 0755)
+	if err != nil {
+		return fmt.Errorf("failed to create output directory %q: %w", flagOutput, err)
+	}
 
 	// 2. Parse Input Files
 	actions, err := loadActions(flagActions)

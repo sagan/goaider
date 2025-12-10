@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 
-	_ "github.com/mithrandie/csvq-driver"
 	"github.com/natefinch/atomic"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"

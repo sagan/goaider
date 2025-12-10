@@ -55,11 +55,14 @@ type FileInfo struct {
 	Mime     string         // "audio/wav", empty if unknown
 	Size     int64          // 1024
 	Mtime    time.Time      // modified time. output to csv in "YYYY-MM-DDTHH:mm:ssZ" format
+	Mdate    string         // modified date, "2006-01-02"
 	Sha256   string         // hex string (lower case)
 	Data     map[string]any // custom meta data
 	MediaWidth    int       // media file width
 	MediaHeight   int       // media file height
 	MediaDuration string    // media file duration (seconds)
+	MediaCtime    time.Time // photo / video creation_time
+	MediaCdate    string    // photo / video creation date, "2006-01-02"
 }
 
 By default, the "data" field is empty map and not outputed to csv, unless the --include flag is set and
@@ -78,7 +81,7 @@ The outputed index only contains normal files, no folders.`,
 func init() {
 	cmd.RootCmd.AddCommand(indexfilesCmd)
 	indexfilesCmd.Flags().BoolVarP(&flagParseMedia, "parse-media", "", false,
-		`Parse media file meta info (width, height, duration). Requires "ffprobe" in path`)
+		`Parse media file meta info (width, height, duration, signature).Videos / audios require "ffprobe" in path`)
 	indexfilesCmd.Flags().BoolVarP(&flagNoHash, "no-hash", "n", false, "Do not calculate SHA256 hash (faster)")
 	indexfilesCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Force overwriting without confirmation")
 	indexfilesCmd.Flags().StringVarP(&flagPrefix, "prefix", "", "", `Output data fields name prefix`)
@@ -97,7 +100,9 @@ func init() {
 }
 
 func indexfiles(cmd *cobra.Command, args []string) (err error) {
-	mediainfo.Init()
+	if flagParseMedia {
+		mediainfo.Init()
+	}
 	if flagOutput != "-" {
 		if exists, err := util.FileExists(flagOutput); err != nil || (exists && !flagForce) {
 			return fmt.Errorf("output file %q exists or can't access, err=%w", flagOutput, err)

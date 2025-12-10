@@ -56,6 +56,11 @@ func init() {
 }
 
 func doFindfiles(cmd *cobra.Command, args []string) (err error) {
+	err = os.MkdirAll(flagOutput, 0755)
+	if err != nil {
+		return fmt.Errorf("failed to create output directory %q: %w", flagOutput, err)
+	}
+
 	var listFile io.Reader
 	if flagListFile == "-" {
 		listFile = os.Stdin

@@ -63,8 +63,8 @@ func Extract(dir string, targetDir string, archive *ArchiveFile, options *Extrac
 			FilePath:  inputFilePath,
 			OutputDir: tmpdir,
 			Passwords: options.Passwords,
-			FileMode:  0666,
-			DirMode:   0777,
+			FileMode:  0644,
+			DirMode:   0755,
 		})
 		// 目前 Go 对部分压缩文件格式支持不佳（例如 rar5 创建的自解压文件）。尝试使用 7z 外部解压工具。
 		if err != nil && options.SevenzipBinary != "" {
@@ -130,7 +130,7 @@ func Extract(dir string, targetDir string, archive *ArchiveFile, options *Extrac
 		if err != nil {
 			return err
 		}
-		if err = os.MkdirAll(dstDir, 0777); err != nil {
+		if err = os.MkdirAll(dstDir, 0755); err != nil {
 			return err
 		}
 	} else {

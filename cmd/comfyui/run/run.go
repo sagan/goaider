@@ -57,6 +57,10 @@ func doRun(cmd *cobra.Command, args []string) (err error) {
 	if flagOutput != "" && flagBatch > 1 {
 		return fmt.Errorf("cannot use --output with --batch > 1. use --output-dir instead")
 	}
+	err = os.MkdirAll(flagOutputDir, 0755)
+	if err != nil {
+		return fmt.Errorf("failed to create output directory %q: %w", flagOutputDir, err)
+	}
 	argWorkflow := args[0]
 
 	ctx, cancel := context.WithCancel(context.Background())

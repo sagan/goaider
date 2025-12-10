@@ -132,9 +132,14 @@ func (p *ProgressTracker) GetResumeString() string {
 	return "" // All done
 }
 
-func doBatchI2V(cmd *cobra.Command, args []string) error {
+func doBatchI2V(cmd *cobra.Command, args []string) (err error) {
 	if flagModel == "" {
 		flagModel = config.GetDefaultModel()
+	}
+
+	err = os.MkdirAll(flagOutput, 0755)
+	if err != nil {
+		return fmt.Errorf("failed to create output directory %q: %w", flagOutput, err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

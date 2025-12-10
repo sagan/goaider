@@ -57,6 +57,11 @@ func extractall(cmd *cobra.Command, args []string) (err error) {
 		}
 	}
 	argInput := args[0]
+	if flagOutput != "-" {
+		if err := os.MkdirAll(flagOutput, 0755); err != nil {
+			return fmt.Errorf("failed to create output directory %q: %w", flagOutput, err)
+		}
+	}
 
 	stats, err := os.Stat(argInput)
 	if err != nil {

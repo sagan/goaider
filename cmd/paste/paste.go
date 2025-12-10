@@ -36,14 +36,14 @@ Output file path can be set by [filename] or --output <filename>.
 }
 
 var (
-	flagForce  bool   // override existing file
-	flagDir    string // Manually specify output dir, if set, it's joined with filename
-	flagOutput string
+	flagForce     bool   // override existing file
+	flagOutputDir string // Manually specify output dir, if set, it's joined with filename
+	flagOutput    string
 )
 
 func init() {
 	pasteCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Optional: override existing file")
-	pasteCmd.Flags().StringVarP(&flagDir, "dir", "d", ".", "Optional: output dir. "+
+	pasteCmd.Flags().StringVarP(&flagOutputDir, "output-dir", "O", ".", "Optional: output dir. "+
 		"If both --dir flag and {filename} are set, the joined path is used")
 	pasteCmd.Flags().StringVarP(&flagOutput, "output", "o", "", `Output file path. Use "-" for stdout`)
 	cmd.RootCmd.AddCommand(pasteCmd)
@@ -53,6 +53,10 @@ func doPaste(cmd *cobra.Command, args []string) (err error) {
 	err = clipboard.Init()
 	if err != nil {
 		return err
+	}
+	err = os.MkdirAll(flagOutputDir, 0755)
+	if err != nil {
+		return fmt.Errorf("failed to create output directory %q: %w", flagOutputDir, err)
 	}
 
 	fullpath := ""
@@ -64,10 +68,10 @@ func doPaste(cmd *cobra.Command, args []string) (err error) {
 	} else if flagOutput != "" {
 		fullpath = flagOutput
 	} else {
-		fullpath = "clipboard-" + time.Now().Format("20060102150304")
+		fullpath = "clipboard-" + time.Now().UTC().Format("20060102150304")
 	}
 	if flagOutput != "-" {
-		fullpath = filepath.Join(flagDir, fullpath)
+		fullpath = filepath.Join(flagOutputDir, fullpath)
 		fullpath, err = filepath.Abs(fullpath)
 		if err != nil {
 			return err

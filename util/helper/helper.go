@@ -242,7 +242,7 @@ func MakeCleanTmpDir(tmpdir string) error {
 			return err
 		}
 	}
-	return os.MkdirAll(tmpdir, 0777)
+	return os.MkdirAll(tmpdir, 0755)
 }
 
 // Read a text input file, process it using custom function and output the result.

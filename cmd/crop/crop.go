@@ -17,11 +17,11 @@ import (
 
 // Flag variables to store command line arguments
 var (
-	flagForce     bool
-	flagCenter    bool // Crop the center of the image, do not use smartcrop
-	flagWidth     int
-	flagHeight    int
-	flagOutputDir string
+	flagForce  bool
+	flagCenter bool // Crop the center of the image, do not use smartcrop
+	flagWidth  int
+	flagHeight int
+	flagOutput string
 )
 
 var cropCmd = &cobra.Command{
@@ -42,7 +42,7 @@ func init() {
 		"Optional: Crop the center of the image, do not use smartcrop")
 	cropCmd.Flags().IntVarP(&flagWidth, "width", "", 1024, "Optional: target photo width")
 	cropCmd.Flags().IntVarP(&flagHeight, "height", "", 1024, "Optional: target photo height")
-	cropCmd.Flags().StringVarP(&flagOutputDir, "output", "o", "",
+	cropCmd.Flags().StringVarP(&flagOutput, "output", "o", "",
 		`Optional: output dir name. default to "<input-dir>-crop"`)
 }
 
@@ -50,7 +50,7 @@ func crop(cmd *cobra.Command, args []string) error {
 	argDir := args[0]
 
 	// Logic: specific output directory calculation
-	finalOutput := flagOutputDir
+	finalOutput := flagOutput
 	if finalOutput == "" {
 		absDir, err := filepath.Abs(argDir)
 		if err != nil {
@@ -59,7 +59,7 @@ func crop(cmd *cobra.Command, args []string) error {
 		finalOutput = absDir + "-crop"
 	}
 
-	if err := os.MkdirAll(finalOutput, 0777); err != nil {
+	if err := os.MkdirAll(finalOutput, 0755); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 

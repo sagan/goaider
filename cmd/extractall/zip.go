@@ -56,12 +56,12 @@ func ExtractZipFile(zipFile *zip.ReadCloser, outputDir string, encoding string, 
 				extractedNames[name] = struct{}{}
 				outoutPath := filepath.Join(outputDir, name)
 				if f.FileInfo().IsDir() {
-					if err := os.MkdirAll(outoutPath, 0777); err != nil {
+					if err := os.MkdirAll(outoutPath, 0755); err != nil {
 						return fmt.Errorf("making zipFile dir: %w", err), false
 					}
 				} else {
 					dir := filepath.Dir(outoutPath)
-					if err := os.MkdirAll(dir, 0777); err != nil {
+					if err := os.MkdirAll(dir, 0755); err != nil {
 						return fmt.Errorf("failed to mkdir %q: %w", dir, err), false
 					}
 					if err := writeZipFile(f, outoutPath); err != nil {
