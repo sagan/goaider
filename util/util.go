@@ -34,6 +34,15 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+func FromJson(str string) any {
+	var data any
+	if err := json.Unmarshal([]byte(str), &data); err != nil {
+		log.Printf("FromJson error: %v", err)
+		return nil
+	}
+	return data
+}
+
 func ToJson(v any) string {
 	b, err := json.Marshal(v)
 	if err != nil {
@@ -570,16 +579,19 @@ func RandInt(min, max int64) int64 {
 	return min + i.Int64()
 }
 
-// If hex is true, return hex string; otherwise return URL-safe base64
 func Sha256sumFile(filename string, hex bool) (string string, err error) {
 	f, err := os.Open(filename)
 	if err != nil {
 		return "", err
 	}
 	defer f.Close()
+	return Sha256sum(f, hex)
+}
 
+// If hex is true, return hex string; otherwise return URL-safe base64
+func Sha256sum(input io.Reader, hex bool) (string string, err error) {
 	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
+	if _, err := io.Copy(h, input); err != nil {
 		return "", err
 	}
 

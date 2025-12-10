@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/sagan/goaider/cmd"
+	"github.com/sagan/goaider/features/mediainfo"
 	"github.com/sagan/goaider/util"
 )
 
@@ -96,6 +97,7 @@ func init() {
 }
 
 func indexfiles(cmd *cobra.Command, args []string) (err error) {
+	mediainfo.Init()
 	if flagOutput != "-" {
 		if exists, err := util.FileExists(flagOutput); err != nil || (exists && !flagForce) {
 			return fmt.Errorf("output file %q exists or can't access, err=%w", flagOutput, err)

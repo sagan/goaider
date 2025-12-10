@@ -30,9 +30,10 @@ require (
 	github.com/xxr3376/gtboard v0.0.2
 	golang.design/x/clipboard v0.7.1
 	golang.org/x/exp v0.0.0-20251125195548-87e1e737ad39
-	golang.org/x/sync v0.18.0
+	golang.org/x/image v0.34.0
+	golang.org/x/sync v0.19.0
 	golang.org/x/term v0.37.0
-	golang.org/x/text v0.31.0
+	golang.org/x/text v0.32.0
 	golift.io/xtractr v0.2.2
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -100,7 +101,6 @@ require (
 	go4.org v0.0.0-20230225012048-214862532bf5 // indirect
 	golang.org/x/crypto v0.41.0 // indirect
 	golang.org/x/exp/shiny v0.0.0-20250606033433-dcc06ee1d476 // indirect
-	golang.org/x/image v0.32.0 // indirect
 	golang.org/x/mobile v0.0.0-20250606033058-a2a15c67f36f // indirect
 	golang.org/x/net v0.43.0 // indirect
 	golang.org/x/oauth2 v0.30.0 // indirect

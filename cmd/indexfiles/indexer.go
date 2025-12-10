@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -21,21 +22,22 @@ import (
 // name,base,ext,size,sha256
 
 type FileInfo struct {
-	Path          string         `json:"path"`           // full relative path, "foo/bar/baz.wav"
-	Name          string         `json:"name"`           // filename, "baz.wav"
-	DirPath       string         `json:"dir_path"`       // parent dir relative path, "foo/bar", empty if file is in root path
-	DirName       string         `json:"dir_name"`       // parent dir name, "bar", empty if file is in root path
-	Base          string         `json:"base"`           // "baz"
-	Ext           string         `json:"ext"`            // ".wav"
-	ExtNodot      string         `json:"ext_nodot"`      // "wav"
-	Mime          string         `json:"mime"`           // "audio/wav", empty if unknown
-	Size          int64          `json:"size"`           // Changed from int to int64 to match os.FileInfo
-	Mtime         time.Time      `json:"mtime"`          // modified time
-	Sha256        string         `json:"sha256"`         // hex string (lower case)
-	Data          map[string]any `json:"data"`           // custom meta data
-	MediaWidth    int            `json:"media_width"`    // media file width
-	MediaHeight   int            `json:"media_height"`   // media file height
-	MediaDuration string         `json:"media_duration"` // media file duration (seconds)
+	Path           string         `json:"path"`            // full relative path, "foo/bar/baz.wav"
+	Name           string         `json:"name"`            // filename, "baz.wav"
+	DirPath        string         `json:"dir_path"`        // parent dir relative path, "foo/bar", empty if file is in root path
+	DirName        string         `json:"dir_name"`        // parent dir name, "bar", empty if file is in root path
+	Base           string         `json:"base"`            // "baz"
+	Ext            string         `json:"ext"`             // ".wav"
+	ExtNodot       string         `json:"ext_nodot"`       // "wav"
+	Mime           string         `json:"mime"`            // "audio/wav", empty if unknown
+	Size           int64          `json:"size"`            // Changed from int to int64 to match os.FileInfo
+	Mtime          time.Time      `json:"mtime"`           // modified time
+	Sha256         string         `json:"sha256"`          // hex string (lower case)
+	Data           map[string]any `json:"data"`            // custom meta data
+	MediaWidth     int            `json:"media_width"`     // media file width
+	MediaHeight    int            `json:"media_height"`    // media file height
+	MediaDuration  string         `json:"media_duration"`  // media file duration (seconds)
+	MediaSignature string         `json:"media_signature"` // image signature (sha256 of pixel data)
 }
 
 type FileList []*FileInfo
@@ -372,14 +374,21 @@ func doIndex(dir string, allowedExts []string, noHash bool, parseMedia bool) (fi
 			Data:     map[string]any{},
 		}
 
-		if parseMedia {
-			mediaInfo, err := mediainfo.ParseMediaInfo(path)
-			if err != nil {
-				log.Warnf("Warning: Could not parse media info for %s: %v\n", path, err)
-			} else if mediaInfo != nil {
-				fi.MediaWidth = mediaInfo.Width
-				fi.MediaHeight = mediaInfo.Height
-				fi.MediaDuration = mediaInfo.Duration
+		if parseMedia && fi.Size > 0 {
+			file, err := os.Open(path)
+			if err == nil {
+				defer file.Close()
+				mediaInfo, err := mediainfo.ParseMediaInfo(file, "")
+				if err == nil {
+					fi.MediaWidth = mediaInfo.Width
+					fi.MediaHeight = mediaInfo.Height
+					fi.MediaDuration = mediaInfo.Duration
+					fi.MediaSignature = mediaInfo.Signature
+				} else {
+					log.Warnf("Warning: Could not open file %s for media info parsing: %v\n", path, err)
+				}
+			} else {
+				log.Warnf("Warning: Could not open media file %s for parsing media info: %v\n", path, err)
 			}
 		}
 
