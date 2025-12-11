@@ -44,7 +44,7 @@ var (
 
 func init() {
 	genCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Force overwriting without confirmation")
-	genCmd.Flags().Float64VarP(&flagTemperature, "temperature", "T", 1.2, constants.HELP_TEMPERATURE_FLAG)
+	genCmd.Flags().Float64VarP(&flagTemperature, "temperature", "T", 1.0, constants.HELP_TEMPERATURE_FLAG)
 	genCmd.Flags().StringVarP(&flatOutput, "output", "o", ".", `Output dir`)
 	genCmd.Flags().StringVarP(&flagModel, "model", "", "", "The model to use. "+constants.HELP_MODEL)
 	genCmd.Flags().StringVarP(&flagModelKey, "model-key", "", "", constants.HELP_MODEL_KEY)

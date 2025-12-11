@@ -83,7 +83,7 @@ var (
 func init() {
 	batchI2VCmd.Flags().BoolVar(&flagForce, "force", false, "Force overwrite existing videos")
 	batchI2VCmd.Flags().IntVarP(&flagBatch, "batch", "b", 1, "Number of variations to generate per image")
-	batchI2VCmd.Flags().Float64VarP(&flagTemperature, "temperature", "T", 1.2, constants.HELP_TEMPERATURE_FLAG)
+	batchI2VCmd.Flags().Float64VarP(&flagTemperature, "temperature", "T", 1.0, constants.HELP_TEMPERATURE_FLAG)
 	batchI2VCmd.Flags().StringVarP(&flagWorkflow, "workflow", "w", "", "(Required) Workflow JSON file")
 	batchI2VCmd.Flags().StringVarP(&flagInput, "input", "i", "", "(Required) Directory containing input images")
 	batchI2VCmd.Flags().StringVarP(&flagOutput, "output", "o", "", "(Required) Directory to save generated videos")

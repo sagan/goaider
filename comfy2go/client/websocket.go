@@ -68,6 +68,7 @@ func (w *WebSocketConnection) ConnectWithManager(timeoutSeconds int) error {
 					w.IsConnected = true
 					close(connected) // Signal that the connection was successful
 					w.handleMessages()
+					w.IsConnected = false
 					return // Exit the goroutine once connected
 				}
 			case <-w.ConnectionDone:
