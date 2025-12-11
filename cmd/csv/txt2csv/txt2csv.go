@@ -43,7 +43,7 @@ func doText2csv(cmd *cobra.Command, args []string) (err error) {
 	for _, filePath := range args {
 		var input io.Reader
 		if filePath == "-" {
-			input = os.Stdin
+			input = cmd.InOrStdin()
 		} else {
 			f, err := os.Open(filePath)
 			if err != nil {
@@ -86,7 +86,7 @@ func doText2csv(cmd *cobra.Command, args []string) (err error) {
 		writer.CloseWithError(err)
 	}()
 	if csvCmd.FlagOutput == "-" {
-		_, err = io.Copy(os.Stdout, reader)
+		_, err = io.Copy(cmd.OutOrStdout(), reader)
 	} else {
 		err = atomic.WriteFile(csvCmd.FlagOutput, reader)
 	}

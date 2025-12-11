@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 
 	"github.com/natefinch/atomic"
 	"github.com/spf13/cobra"
@@ -74,7 +73,7 @@ func parsetfef(cmd *cobra.Command, args []string) (err error) {
 		writer.CloseWithError(err)
 	}()
 	if flagOutput == "-" {
-		_, err = io.Copy(os.Stdout, reader)
+		_, err = io.Copy(cmd.OutOrStdout(), reader)
 	} else {
 		err = atomic.WriteFile(flagOutput, reader)
 	}

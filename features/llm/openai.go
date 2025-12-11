@@ -335,6 +335,7 @@ func OpenAIJsonResponse[T any](baseUrl string, apiKey string, model string,
 	if !ok {
 		return nil, fmt.Errorf("unexpected content format in response")
 	}
+	rawJsonString = StripJsonWrap(rawJsonString)
 
 	result := new(T)
 	if err := json.Unmarshal([]byte(rawJsonString), &result); err != nil {
@@ -417,6 +418,7 @@ func OpenAIImageToJson[T any](baseUrl string, apiKey string, model string, promp
 	if !ok {
 		return nil, fmt.Errorf("unexpected content format in response")
 	}
+	rawJsonString = StripJsonWrap(rawJsonString)
 
 	result := new(T)
 	if err := json.Unmarshal([]byte(rawJsonString), &result); err != nil {

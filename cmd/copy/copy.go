@@ -40,7 +40,7 @@ func doCopy(cmd *cobra.Command, args []string) error {
 	}
 	var input io.Reader
 	if flagInput == "" || flagInput == "-" {
-		input = os.Stdin
+		input = cmd.InOrStdin()
 	} else {
 		f, err := os.Open(flagInput)
 		if err != nil {

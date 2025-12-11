@@ -57,7 +57,7 @@ func doMediainfo(cmd *cobra.Command, args []string) (err error) {
 	argFilename := args[0]
 	var input io.Reader
 	if argFilename == "-" {
-		input = os.Stdin
+		input = cmd.InOrStdin()
 	} else {
 		f, err := os.Open(argFilename)
 		if err != nil {

@@ -185,7 +185,7 @@ func indexfiles(cmd *cobra.Command, args []string) (err error) {
 		writer.CloseWithError(err)
 	}()
 	if flagOutput == "-" {
-		_, err = io.Copy(os.Stdout, reader)
+		_, err = io.Copy(cmd.OutOrStdout(), reader)
 	} else {
 		err = atomic.WriteFile(flagOutput, reader)
 	}
@@ -226,7 +226,7 @@ func updateFileMeta(inputDir string, file *FileInfo, metaName string, metaFileSu
 	metaFileExt := filepath.Ext(metaFilePath)
 	if metaFileExt == ".json" || metaFileExt == ".yaml" || metaFileExt == ".yml" || metaFileExt == ".toml" {
 		var obj any
-		obj, err = util.Unmarshal(metaFileExt, bytes.NewReader(contents))
+		obj, err = util.Unmarshal(bytes.NewReader(contents), metaFileExt)
 		if err != nil {
 			log.Printf("failed to parse .json %q: %v", metaFilePath, err)
 			return

@@ -99,8 +99,8 @@ func init() {
 	batchGenCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Force overwriting existing file(s)")
 	batchGenCmd.Flags().IntVarP(&flagBatch, "batch", "b", 8, "Batch run N times for each prompt")
 	batchGenCmd.Flags().StringVarP(&flagOutput, "output", "o", "", "(Required) Output directory")
-	batchGenCmd.Flags().StringArrayVarP(&flagVars, "var", "v", nil, `Workflow variables (e.g. 41:0:%prompt%). `+
-		`Special values: "%rand%" : a random seed; "%prompt%" : the generated prompt from action & context`)
+	batchGenCmd.Flags().StringArrayVarP(&flagVars, "var", "v", nil, `Workflow variables (e.g. "41:0:%prompt%"). `+
+		`Special values: %rand% : a random seed; %prompt% : the generated prompt from action & context`)
 	batchGenCmd.Flags().StringVarP(&flagWorkflow, "workflow", "w", "", "(Required) Workflow file path")
 	batchGenCmd.Flags().StringVarP(&flagActions, "actions", "a", "", "(Required) Actions CSV file")
 	batchGenCmd.Flags().StringVarP(&flagContext, "contexts", "c", "", "Contexts CSV file")

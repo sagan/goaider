@@ -22,6 +22,7 @@ import (
 	_ "github.com/sagan/goaider/cmd/randu"
 	_ "github.com/sagan/goaider/cmd/sha256sum"
 	_ "github.com/sagan/goaider/cmd/sovits-genlist"
+	_ "github.com/sagan/goaider/cmd/structdiff"
 	_ "github.com/sagan/goaider/cmd/stt"
 	_ "github.com/sagan/goaider/cmd/translate"
 )

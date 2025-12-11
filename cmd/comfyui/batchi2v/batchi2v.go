@@ -25,17 +25,24 @@ import (
 	"github.com/sagan/goaider/util"
 )
 
-const DEFAULT_PROMPT = `Analyze this image that
-1. Write a detailed cinematic prompt for video generation (focus on motion).
-2. Write a very short 3-5 word Simplified Chinese summary for the filename of generated video.
+const DEFAULT_PROMPT = `You are an expert in generating creative and detailed prompts for AI video and audio generation models.
+Your task is to analyze the provided image and generate a structured JSON output containing prompts for video and audio.
+
+The output should be a JSON object which contains these fields:
+1.  "prompt": (string) A detailed, cinematic, and highly descriptive prompt for video generation. Focus heavily on motion, camera angles, lighting, and mood. This prompt should be concise, ideally under 50 words, but rich in detail.
+2.  "negative_prompt": (string) A negative prompt for video generation, listing elements to avoid.
+3.  "audio_prompt": (string) A detailed prompt for audio generation that complements the visual scene. Describe sounds, atmosphere, and any specific audio elements.
+4.  "audio_negative_prompt": (string) A negative prompt for audio generation, listing sounds to avoid.
+5.  "title_zh": (string) A very short (3-5 words) Simplified Chinese summary suitable for a filename. This should capture the essence of the video in a concise, filename-friendly way.
 `
 
-// Define the structure we want Gemini to return
+// Define the structure we want LLM to return
 type I2VResponse struct {
-	// The detailed prompt for the video generation model
-	Prompt string `json:"prompt" jsonschema:"description=A detailed and cinematic description of the movement and scene for video generation that's under 50 words."`
-	// A short, filename-friendly description (e.g., "cat_running_grass")
-	ShortDescriptionZh string `json:"short_description_zh" jsonschema:"description=A very short (3-5 word) Simplified Chinese summary suitable for a filename."`
+	TitleZh             string `json:"title_zh" jsonschema:"description=A very short (3-5 word) Simplified Chinese summary for the filename of generated video."`
+	Prompt              string `json:"prompt" jsonschema:"description=A detailed cinematic prompt for video generation (focus on motion)."`
+	NegativePrompt      string `json:"negative_prompt" jsonschema:"description=A negative prompt for video generation."`
+	AudioPrompt         string `json:"audio_prompt" jsonschema:"description=A detailed prompt for audio track generation."`
+	AudioNegativePrompt string `json:"audio_negative_prompt" jsonschema:"description=A negative prompt for audio track generation."`
 }
 
 var batchI2VCmd = &cobra.Command{
@@ -83,7 +90,10 @@ func init() {
 	batchI2VCmd.Flags().StringArrayVarP(&flagServer, "server", "s", []string{"127.0.0.1:8188"},
 		"ComfyUI server address(es)")
 	batchI2VCmd.Flags().StringArrayVarP(&flagVars, "var", "v", nil,
-		`Set variables. Use "%image%" for input image, "%prompt%" for LLM text, "%rand%" for random seed.`)
+		`Workflow variables (e.g. "41:0:%prompt%"). Special values: %rand% : a random seed; `+
+			`%image% : input image full path; %prompt% : video prompt; %negative_prompt% : video negative prompt; `+
+			`%audio_prompt% : audio prompt; %audio_negative_prompt% : audio negative prompt`,
+	)
 	batchI2VCmd.Flags().StringVarP(&flagModel, "model", "", "", "The model to use. "+constants.HELP_MODEL)
 	batchI2VCmd.Flags().StringVarP(&flagModelKey, "model-key", "", "", constants.HELP_MODEL_KEY)
 	batchI2VCmd.Flags().BoolVarP(&flagNoPrompt, "no-prompt", "", false, "Skip LLM prompt generation")
@@ -318,10 +328,10 @@ func processI2V(ctx context.Context, pool chan *api.Client, task i2vTask) error 
 		if err != nil {
 			return fmt.Errorf("LLM generation failed: %w", err)
 		}
-		log.Printf("    📝 [%s] Desc: %s", task.baseName, llmResp.ShortDescriptionZh)
+		log.Printf("    📝 [%s] Desc: %s", task.baseName, llmResp.TitleZh)
 	} else {
 		// Default if no prompt
-		llmResp.ShortDescriptionZh = "batch"
+		llmResp.TitleZh = "视频"
 	}
 
 	// B. ComfyUI Execution
@@ -376,7 +386,10 @@ func executeI2VWorkflow(ctx context.Context, client *api.Client, task i2vTask, l
 	processedVars := make([]string, len(flagVars))
 	for i, v := range flagVars {
 		v = strings.ReplaceAll(v, "%image%", absPath)
-		v = strings.ReplaceAll(v, "%prompt%", llmResp.Prompt) // Use the detailed prompt
+		v = strings.ReplaceAll(v, "%prompt%", llmResp.Prompt)
+		v = strings.ReplaceAll(v, "%negative_prompt%", llmResp.NegativePrompt)
+		v = strings.ReplaceAll(v, "%audio_prompt%", llmResp.AudioPrompt)
+		v = strings.ReplaceAll(v, "%audio_negative_prompt%", llmResp.AudioNegativePrompt)
 		processedVars[i] = v
 	}
 
@@ -396,7 +409,7 @@ func executeI2VWorkflow(ctx context.Context, client *api.Client, task i2vTask, l
 	}
 
 	// Pass ShortDescription as the 3rd argument (prefix)
-	return outputs.SaveAll(flagOutput, flagForce, llmResp.ShortDescriptionZh)
+	return outputs.SaveAll(flagOutput, flagForce, llmResp.TitleZh)
 }
 
 func retry(attempts int, fn func() error) error {

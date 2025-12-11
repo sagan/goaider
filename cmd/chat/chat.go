@@ -165,7 +165,7 @@ func doChat(cmd *cobra.Command, args []string) (err error) {
 	for _, inputFile := range flagInputs {
 		var input io.Reader
 		if inputFile == "-" {
-			input = os.Stdin
+			input = cmd.InOrStdin()
 		} else {
 			f, err := os.Open(inputFile)
 			if err != nil {
@@ -215,11 +215,13 @@ func doChat(cmd *cobra.Command, args []string) (err error) {
 		if schemaValidator != nil {
 			if err := schemaValidator.Validate([]byte(responseStr)); err != nil {
 				writer.CloseWithError(fmt.Errorf("LLM response does not conform to schema: %w", err))
+				return
 			}
 		}
+		writer.Close()
 	}()
 	if flagOutput == "-" {
-		_, err = io.Copy(os.Stdout, reader)
+		_, err = io.Copy(cmd.OutOrStdout(), reader)
 	} else {
 		err = atomic.WriteFile(flagOutput, reader)
 	}

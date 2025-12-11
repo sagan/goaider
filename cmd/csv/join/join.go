@@ -74,7 +74,7 @@ func join(cmd *cobra.Command, args []string) (err error) {
 
 	var leftCsvReader, rightCsvReader io.Reader
 	if argLeftCsv == "-" {
-		leftCsvReader = os.Stdin
+		leftCsvReader = cmd.InOrStdin()
 	} else {
 		f, err := os.Open(argLeftCsv)
 		if err != nil {
@@ -88,7 +88,7 @@ func join(cmd *cobra.Command, args []string) (err error) {
 		if argLeftCsv == "-" {
 			return fmt.Errorf("cannot read both left and right CSV from stdin")
 		}
-		rightCsvReader = os.Stdin
+		rightCsvReader = cmd.InOrStdin()
 	} else {
 		f, err := os.Open(argRightCsv)
 		if err != nil {
@@ -107,7 +107,7 @@ func join(cmd *cobra.Command, args []string) (err error) {
 		writer.CloseWithError(err)
 	}()
 	if csv.FlagOutput == "-" {
-		_, err = io.Copy(os.Stdout, reader)
+		_, err = io.Copy(cmd.OutOrStdout(), reader)
 	} else {
 		err = atomic.WriteFile(csv.FlagOutput, reader)
 	}

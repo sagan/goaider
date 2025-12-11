@@ -169,3 +169,16 @@ func isOpenAiModel(model string) bool {
 	return strings.HasPrefix(model, OPENAI_MODEL_PREFIX) || slices.Contains(openaiModels, model) ||
 		slices.ContainsFunc(openaiModelPrefixes, func(prefix string) bool { return strings.HasPrefix(model, prefix) })
 }
+
+// Strip possible "```" or "```json" wrapper from LLM structured output.
+func StripJsonWrap(str string) string {
+	str = strings.TrimSpace(str)
+	if strings.HasPrefix(str, "```json") && strings.HasSuffix(str, "```") {
+		str = strings.TrimPrefix(str, "```json")
+		str = strings.TrimSuffix(str, "```")
+	} else if strings.HasPrefix(str, "```") && strings.HasSuffix(str, "```") {
+		str = strings.TrimPrefix(str, "```")
+		str = strings.TrimSuffix(str, "```")
+	}
+	return strings.TrimSpace(str)
+}

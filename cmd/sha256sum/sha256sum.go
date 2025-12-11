@@ -38,7 +38,7 @@ func doSha256sum(cmd *cobra.Command, args []string) (err error) {
 
 	if len(args) == 0 || (len(args) == 1 && args[0] == "-") {
 		// Read from stdin
-		hash, err := util.Sha256sum(os.Stdin, true)
+		hash, err := util.Sha256sum(cmd.InOrStdin(), true)
 		if err != nil {
 			return fmt.Errorf("failed to calculate SHA256 for stdin: %w", err)
 		}

@@ -63,7 +63,7 @@ func doFindfiles(cmd *cobra.Command, args []string) (err error) {
 
 	var listFile io.Reader
 	if flagListFile == "-" {
-		listFile = os.Stdin
+		listFile = cmd.InOrStdin()
 	} else {
 		f, err := os.Open(flagListFile)
 		if err != nil {

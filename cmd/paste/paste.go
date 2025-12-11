@@ -87,7 +87,7 @@ func doPaste(cmd *cobra.Command, args []string) (err error) {
 		if flagOutput == "" { // only append ext if filename is not provided by user
 			fullpath += ".png"
 		} else if flagOutput == "-" {
-			if term.IsTerminal(int(os.Stdout.Fd())) && !flagForce {
+			if cmd.OutOrStdout() == os.Stdout && term.IsTerminal(int(os.Stdout.Fd())) && !flagForce {
 				return fmt.Errorf("clipboard is image but stdout is tty, refuse to write")
 			}
 		} else if ext := filepath.Ext(fullpath); ext != ".png" && ext != ".PNG" {
@@ -111,7 +111,7 @@ func doPaste(cmd *cobra.Command, args []string) (err error) {
 			return err
 		}
 	} else if flagOutput == "-" {
-		_, err = os.Stdout.Write(data)
+		_, err = cmd.OutOrStdout().Write(data)
 		return err
 	} else if exists, err := util.FileExists(fullpath); err != nil || (exists && !flagForce) {
 		return fmt.Errorf("target file %q already exists or access error. err: %w", fullpath, err)

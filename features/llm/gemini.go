@@ -142,6 +142,7 @@ func GeminiJsonResponse[T any](apiKey string, model string, promptText string, t
 
 	// The actual JSON data is a string *inside* the Text field
 	rawJsonString := apiResp.Candidates[0].Content.Parts[0].Text
+	rawJsonString = StripJsonWrap(rawJsonString)
 
 	result := new(T)
 	if err := json.Unmarshal([]byte(rawJsonString), &result); err != nil {
@@ -250,6 +251,8 @@ func GeminiImageToJson[T any](apiKey string, model string, promptText string,
 
 	// 5. Parse JSON
 	rawJsonString := apiResp.Candidates[0].Content.Parts[0].Text
+	rawJsonString = StripJsonWrap(rawJsonString)
+
 	result := new(T)
 	if err := json.Unmarshal([]byte(rawJsonString), &result); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal internal JSON: %w", err)

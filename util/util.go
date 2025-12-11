@@ -17,6 +17,7 @@ import (
 	"math/big"
 	mathRand "math/rand"
 	"mime"
+	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -45,6 +46,15 @@ func FromJson(str string) any {
 
 func ToJson(v any) string {
 	b, err := json.Marshal(v)
+	if err != nil {
+		log.Printf("ToJson error: %v", err)
+		return ""
+	}
+	return string(b)
+}
+
+func ToPrettyJson(v any) string {
+	b, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		log.Printf("ToJson error: %v", err)
 		return ""
@@ -330,7 +340,7 @@ func MediaType(contentType string) string {
 // Unmarshal a json / yaml / toml / xml string according to contentType.
 // contentType could be: a mediatype (e.g. "application/json"), or a file type or extension (e.g. "json" or ".json").
 // If contentType is empty or is not a supported type, return an error.
-func Unmarshal(contentType string, input io.Reader) (data any, err error) {
+func Unmarshal(input io.Reader, contentType string) (data any, err error) {
 	switch contentType {
 	case "application/json", "text/json", "json", ".json",
 		"application/yaml", "text/yaml", "yaml", ".yaml", "yml", ".yml",
@@ -654,4 +664,26 @@ func GetMimeType(filename string) string {
 		mimeType = mimeType[:i]
 	}
 	return mimeType
+}
+
+// Detect input content type of input.
+// It always return a reader that read original input contents.
+// If err is nil, it returns a valid MIME type.
+// if returns an err only when input read error.
+func DetectContentType(input io.Reader) (reader io.Reader, contentType string, err error) {
+	buf := make([]byte, 512)
+	n, err := io.ReadFull(input, buf)
+	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+		if n > 0 {
+			return io.MultiReader(bytes.NewReader(buf[:n]), input), "", err
+		}
+		return input, "", err
+	}
+	if n == 0 {
+		return input, "application/octet-stream", nil
+	}
+	// Create a new reader that combines the peeked bytes and the original reader
+	reader = io.MultiReader(bytes.NewReader(buf[:n]), input)
+	contentType, _, _ = strings.Cut(http.DetectContentType(buf[:n]), ";")
+	return reader, contentType, nil
 }

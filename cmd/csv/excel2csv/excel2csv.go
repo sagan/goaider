@@ -44,7 +44,7 @@ func doExcel2Csv(cmd *cobra.Command, args []string) (err error) {
 	}
 	var input io.Reader
 	if argInput == "-" {
-		input = os.Stdin
+		input = cmd.InOrStdin()
 	} else {
 		f, err := os.Open(argInput)
 		if err != nil {
@@ -141,7 +141,7 @@ func doExcel2Csv(cmd *cobra.Command, args []string) (err error) {
 	}()
 
 	if csvCmd.FlagOutput == "-" {
-		_, err = io.Copy(os.Stdout, reader)
+		_, err = io.Copy(cmd.OutOrStdout(), reader)
 	} else {
 		err = atomic.WriteFile(csvCmd.FlagOutput, reader)
 	}

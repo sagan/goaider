@@ -174,7 +174,7 @@ func doTranslate(cmd *cobra.Command, args []string) (err error) {
 
 	inputText := ""
 	if flagInput == "-" {
-		if contents, err := io.ReadAll(os.Stdin); err != nil {
+		if contents, err := io.ReadAll(cmd.InOrStdin()); err != nil {
 			return fmt.Errorf("failed to read stdin: %w", err)
 		} else {
 			inputText = string(contents)

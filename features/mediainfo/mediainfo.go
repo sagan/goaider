@@ -1,7 +1,6 @@
 package mediainfo
 
 import (
-	"bufio"
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
@@ -13,7 +12,6 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
-	"net/http"
 	"os/exec"
 	"strings"
 	"sync"
@@ -21,6 +19,7 @@ import (
 
 	exif "github.com/dsoprea/go-exif/v3"
 	exifcommon "github.com/dsoprea/go-exif/v3/common"
+	"github.com/sagan/goaider/util"
 
 	log "github.com/sirupsen/logrus"
 	_ "golang.org/x/image/bmp"
@@ -177,13 +176,10 @@ func Init() {
 //	error: An error if parsing fails or the media type is unsupported.
 func ParseMediaInfo(input io.Reader, mimeType string) (info *MediaFileInfo, err error) {
 	if mimeType == "" {
-		br := bufio.NewReader(input)
-		header, err := br.Peek(512)
-		if err != nil && err != io.EOF {
+		input, mimeType, err = util.DetectContentType(input)
+		if err != nil {
 			return nil, err
 		}
-		mimeType = http.DetectContentType(header)
-		input = br
 	}
 	switch {
 	case strings.HasPrefix(mimeType, "image/"):

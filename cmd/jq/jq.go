@@ -45,7 +45,7 @@ func doJq(cmd *cobra.Command, args []string) (err error) {
 	argFilename := args[0]
 	var file io.Reader
 	if argFilename == "-" {
-		file = os.Stdin
+		file = cmd.InOrStdin()
 	} else {
 		f, err := os.Open(argFilename)
 		if err != nil {
@@ -83,7 +83,7 @@ func doJq(cmd *cobra.Command, args []string) (err error) {
 			sb.WriteString("\n")
 		}
 		if flagOutput == "-" {
-			_, err = os.Stdout.WriteString(sb.String())
+			_, err = cmd.OutOrStdout().Write([]byte(sb.String()))
 		} else {
 			err = atomic.WriteFile(flagOutput, strings.NewReader(sb.String()))
 		}
@@ -102,7 +102,7 @@ func doJq(cmd *cobra.Command, args []string) (err error) {
 		return fmt.Errorf("template execute error: %w", err)
 	}
 	if flagOutput == "-" {
-		_, err = os.Stdout.WriteString(output)
+		_, err = cmd.OutOrStdout().Write([]byte(output))
 	} else {
 		err = atomic.WriteFile(flagOutput, strings.NewReader(output))
 	}

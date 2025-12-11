@@ -2,7 +2,6 @@ package randu
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/natefinch/atomic"
@@ -37,7 +36,7 @@ func doRandu(cmd *cobra.Command, args []string) (err error) {
 	s := fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 
 	if flagOutput == "-" {
-		_, err = os.Stdout.WriteString(s)
+		_, err = cmd.OutOrStdout().Write([]byte(s))
 	} else {
 		err = atomic.WriteFile(flagOutput, strings.NewReader(s))
 	}

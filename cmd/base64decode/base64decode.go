@@ -52,7 +52,7 @@ func doBase64decode(cmd *cobra.Command, args []string) (err error) {
 	var input io.Reader
 	if flagInput != "" {
 		if flagInput == "-" {
-			input = os.Stdin
+			input = cmd.InOrStdin()
 		} else {
 			f, err := os.Open(flagInput)
 			if err != nil {
@@ -93,11 +93,12 @@ func doBase64decode(cmd *cobra.Command, args []string) (err error) {
 	}
 
 	if flagOutput == "-" {
-		if !utf8.Valid(decodedBytes) && !term.IsTerminal(int(os.Stdout.Fd())) && !flagForce {
+		if !utf8.Valid(decodedBytes) && cmd.OutOrStdout() == os.Stdout &&
+			term.IsTerminal(int(os.Stdout.Fd())) && !flagForce {
 			return fmt.Errorf("decoded data is %d bytes binary but output is tty. use --force to ignore",
 				len(decodedBytes))
 		}
-		_, err = os.Stdout.Write(decodedBytes)
+		_, err = cmd.OutOrStdout().Write(decodedBytes)
 	} else {
 		reader := bytes.NewReader(decodedBytes)
 		err = atomic.WriteFile(flagOutput, reader)

@@ -46,7 +46,7 @@ func doBase64encode(cmd *cobra.Command, args []string) (err error) {
 	if len(args) > 0 {
 		input = []byte(args[0])
 	} else if flagInput == "-" {
-		input, err = io.ReadAll(os.Stdin)
+		input, err = io.ReadAll(cmd.InOrStdin())
 		if err != nil {
 			return err
 		}
@@ -73,7 +73,7 @@ func doBase64encode(cmd *cobra.Command, args []string) (err error) {
 	}
 
 	if flagOutput == "-" {
-		_, err = os.Stdout.WriteString(encoded)
+		_, err = cmd.OutOrStdout().Write([]byte(encoded))
 	} else {
 		reader := strings.NewReader(encoded)
 		err = atomic.WriteFile(flagOutput, reader)

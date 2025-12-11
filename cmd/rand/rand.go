@@ -2,7 +2,6 @@ package rand
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/natefinch/atomic"
@@ -41,7 +40,7 @@ func doRand(cmd *cobra.Command, args []string) (err error) {
 
 	data := util.RandString(flagLength, flagDigitOnly)
 	if flagOutput == "-" {
-		_, err = os.Stdout.WriteString(data)
+		_, err = cmd.OutOrStdout().Write([]byte(data))
 	} else {
 		err = atomic.WriteFile(flagOutput, strings.NewReader(data))
 	}

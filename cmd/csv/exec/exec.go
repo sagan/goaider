@@ -51,7 +51,7 @@ func doExec(cmd *cobra.Command, args []string) (err error) {
 	argInput := args[0]
 	var input io.Reader
 	if argInput == "-" {
-		input = os.Stdin
+		input = cmd.InOrStdin()
 	} else {
 		f, err := os.Open(argInput)
 		if err != nil {

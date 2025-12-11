@@ -61,7 +61,7 @@ func doParseMeta(cmd *cobra.Command, args []string) (err error) {
 	argFilename := args[0]
 	var file io.Reader
 	if argFilename == "-" {
-		file = os.Stdin
+		file = cmd.InOrStdin()
 	} else {
 		f, err := os.Open(argFilename)
 		if err != nil {
@@ -92,7 +92,7 @@ func doParseMeta(cmd *cobra.Command, args []string) (err error) {
 		output = util.ToJson(meta)
 	}
 	if flagOutput == "-" {
-		_, err = os.Stdout.WriteString(output)
+		_, err = cmd.OutOrStdout().Write([]byte(output))
 	} else {
 		err = atomic.WriteFile(flagOutput, strings.NewReader(output))
 	}

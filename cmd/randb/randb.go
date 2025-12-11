@@ -58,12 +58,12 @@ func doRandb(cmd *cobra.Command, args []string) (err error) {
 
 	if flagOutput == "-" {
 		if s != "" {
-			_, err = os.Stdout.WriteString(s)
+			_, err = cmd.OutOrStdout().Write([]byte(s))
 		} else {
-			if term.IsTerminal(int(os.Stdout.Fd())) {
+			if cmd.OutOrStdout() == os.Stdout && term.IsTerminal(int(os.Stdout.Fd())) {
 				return fmt.Errorf("stdout is tty. use --raw only when redirecting to a file or piping to another command")
 			}
-			_, err = os.Stdout.Write(b)
+			_, err = cmd.OutOrStdout().Write(b)
 		}
 	} else {
 		if s != "" {

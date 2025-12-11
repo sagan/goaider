@@ -6,7 +6,6 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
-	"os"
 	"sort"
 	"strings"
 	"text/template"
@@ -94,7 +93,7 @@ func query(cmd *cobra.Command, args []string) (err error) {
 		writer.CloseWithError(err)
 	}()
 	if csvCmd.FlagOutput == "-" {
-		_, err = io.Copy(os.Stdout, reader)
+		_, err = io.Copy(cmd.OutOrStdout(), reader)
 	} else {
 		err = atomic.WriteFile(csvCmd.FlagOutput, reader)
 	}
