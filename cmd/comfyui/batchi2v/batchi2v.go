@@ -161,16 +161,18 @@ func doBatchI2V(cmd *cobra.Command, args []string) (err error) {
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		shutdowning := false
-		select {
-		case <-sigChan:
-			if shutdowning {
-				os.Exit(1)
-			} else {
-				log.Warnf("Received interrupt signal, shutting down... Press ctrl+c again to force exit immediately")
-				shutdowning = true
-				cancel()
+		for {
+			select {
+			case <-sigChan:
+				if shutdowning {
+					os.Exit(1)
+				} else {
+					log.Warnf("Received interrupt signal, shutting down... Press ctrl+c again to force exit immediately")
+					shutdowning = true
+					cancel()
+				}
+			case <-ctx.Done():
 			}
-		case <-ctx.Done():
 		}
 	}()
 
@@ -251,11 +253,6 @@ func doBatchI2V(cmd *cobra.Command, args []string) (err error) {
 			}
 		}
 	}()
-
-	if tasksToProcess == 0 && flagResume != "" {
-		log.Warnf("No files found after resume point '%s'. Check if filename is correct.", flagResume)
-		return nil
-	}
 
 	clientPool := make(chan *api.Client, len(flagServer))
 	for _, addr := range flagServer {

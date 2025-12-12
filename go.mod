@@ -10,6 +10,8 @@ require (
 	cloud.google.com/go/translate v1.12.7
 	github.com/c-bata/go-prompt v0.2.6
 	github.com/disintegration/imaging v1.6.2
+	github.com/dop251/goja v0.0.0-20251201205617-2bb4c724c0f9
+	github.com/dop251/goja_nodejs v0.0.0-20251015164255-5e94316bedaf
 	github.com/dsoprea/go-exif/v3 v3.0.1
 	github.com/go-sprout/sprout v1.0.2
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
@@ -57,8 +59,6 @@ require (
 	github.com/connesc/cipherio v0.2.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dlclark/regexp2 v1.11.4 // indirect
-	github.com/dop251/goja v0.0.0-20251201205617-2bb4c724c0f9 // indirect
-	github.com/dop251/goja_nodejs v0.0.0-20251015164255-5e94316bedaf // indirect
 	github.com/dsoprea/go-logging v0.0.0-20200710184922-b02d349568dd // indirect
 	github.com/dsoprea/go-utility/v2 v2.0.0-20221003172846-a3e1774ef349 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect

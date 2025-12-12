@@ -69,16 +69,18 @@ func doRun(cmd *cobra.Command, args []string) (err error) {
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		shutdowning := false
-		select {
-		case <-sigChan:
-			if shutdowning {
-				os.Exit(1)
-			} else {
-				log.Warnf("Received interrupt signal, shutting down... Press ctrl+c again to force exit immediately")
-				shutdowning = true
-				cancel()
+		for {
+			select {
+			case <-sigChan:
+				if shutdowning {
+					os.Exit(1)
+				} else {
+					log.Warnf("Received interrupt signal, shutting down... Press ctrl+c again to force exit immediately")
+					shutdowning = true
+					cancel()
+				}
+			case <-ctx.Done():
 			}
-		case <-ctx.Done():
 		}
 	}()
 
