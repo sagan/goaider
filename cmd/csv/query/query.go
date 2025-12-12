@@ -8,7 +8,6 @@ import (
 	"io"
 	"sort"
 	"strings"
-	"text/template"
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mithrandie/csvq-driver"
@@ -230,7 +229,7 @@ func writeSqlRowsToText(rows *sql.Rows, output io.Writer, templateStr string, on
 	// Special case: 1 column and empty template -> just output the value directly
 	isSingleColRaw := len(cols) == 1 && templateStr == ""
 
-	var t *template.Template
+	var t *helper.Template
 	if !isSingleColRaw {
 		if templateStr != "" {
 			t, err = helper.GetTemplate(templateStr, true)

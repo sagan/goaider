@@ -5,14 +5,13 @@ import (
 	"fmt"
 	"io" // Renamed to avoid conflict with current package name 'exec'
 
-	"github.com/sagan/goaider/util"
 	"github.com/sagan/goaider/util/helper"
 	"github.com/sagan/goaider/util/stringutil"
 )
 
 func renderCsv(input io.Reader, templateStr string, noHeader bool, output io.Writer, oneLine bool) (err error) {
 	// 1. Parse the template initially to ensure it is valid.
-	tmpl, err := helper.GetTemplate(templateStr, true)
+	tpl, err := helper.GetTemplate(templateStr, true)
 	if err != nil {
 		return fmt.Errorf("invalid template: %w", err)
 	}
@@ -62,8 +61,7 @@ func renderCsv(input io.Reader, templateStr string, noHeader bool, output io.Wri
 			}
 		}
 
-		// Execute Template
-		renderResult, err := util.ExecTemplate(tmpl, data)
+		renderResult, err := tpl.Exec(data)
 		if err != nil {
 			return fmt.Errorf("template execute error: %w", err)
 		}

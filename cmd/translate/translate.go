@@ -8,7 +8,6 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
-	"text/template"
 
 	"cloud.google.com/go/translate"
 	"github.com/c-bata/go-prompt"
@@ -108,7 +107,7 @@ func doTranslate(cmd *cobra.Command, args []string) (err error) {
 		argInput = args[0]
 	}
 
-	var outputTemplate *template.Template
+	var outputTemplate *helper.Template
 	if flagOutputTemplate != "" {
 		outputTemplate, err = helper.GetTemplate(flagOutputTemplate, true)
 		if err != nil {
@@ -254,7 +253,7 @@ func doTranslate(cmd *cobra.Command, args []string) (err error) {
 
 // render generated the response from translated text, optionally with a prefix or using a template.
 // It returns an error if template execution fails.
-func render(tpl *template.Template, prefix, text, original, target, source string) (response string, err error) {
+func render(tpl *helper.Template, prefix, text, original, target, source string) (response string, err error) {
 	if tpl != nil {
 		data := map[string]string{
 			"text":     text,
@@ -262,7 +261,7 @@ func render(tpl *template.Template, prefix, text, original, target, source strin
 			"target":   target,
 			"source":   source,
 		}
-		response, err = util.ExecTemplate(tpl, data)
+		response, err = tpl.Exec(data)
 		if err != nil {
 			return "", fmt.Errorf("failed to execute copy template: %w", err)
 		}

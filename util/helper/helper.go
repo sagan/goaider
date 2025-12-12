@@ -2,16 +2,24 @@
 package helper
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"text/template"
 
+	"github.com/dop251/goja"
+	"github.com/dop251/goja_nodejs/console"
+	"github.com/dop251/goja_nodejs/require"
 	"github.com/go-sprout/sprout"
 	"github.com/go-sprout/sprout/group/all"
+	"github.com/google/shlex"
 	"github.com/natefinch/atomic"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/term"
@@ -20,6 +28,31 @@ import (
 	"github.com/sagan/goaider/util/pathutil"
 	"github.com/sagan/goaider/util/stringutil"
 )
+
+// Additional template functions, require url to be signed.
+// Due to the pipeline way that Go template works, the last argument of funcs shoud be the primary one.
+var additionalTemplateFuncs = map[string]any{
+	"system": system,
+}
+
+// Similar to C library system funtion.
+func system(cmdline any) int {
+	args, err := shlex.Split(util.ToString(cmdline))
+	if err != nil || len(args) < 1 {
+		return -1
+	}
+	cmd := exec.Command(args[0], args[1:]...)
+	err = cmd.Wait()
+	if err != nil {
+		switch e := err.(type) {
+		case *exec.ExitError:
+			return e.ExitCode()
+		default:
+			return -1
+		}
+	}
+	return 0
+}
 
 func ParseFilenameArgs(args ...string) []string {
 	names := []string{}
@@ -353,6 +386,7 @@ func InputTextFileAndOutput(input, output string, force bool, processor func(r i
 
 var handler *sprout.DefaultHandler
 
+// sprout provided template funcs
 var templateFuncs map[string]any
 
 func init() {
@@ -361,10 +395,44 @@ func init() {
 	templateFuncs = handler.Build()
 }
 
+// Simple wrapper on Go text template.Template.
+// Add JavaScript exection (eval) ability.
+type Template struct {
+	*template.Template
+	jsvm *goja.Runtime
+	mu   sync.Mutex
+}
+
+// Execute Go text template and return rendered string.
+// It supports a special "eval" function.
+// The result string is trim spaced.
+func (t *Template) Exec(data any) (string, error) {
+	var buf bytes.Buffer
+	if t.jsvm != nil && data != nil {
+		t.mu.Lock()
+		// allow data sharing between Go text template runtime and JavaScript runtime
+		if m, ok := data.(map[string]any); ok {
+			data = maps.Clone(m)
+		} else if m, ok := data.(map[string]string); ok {
+			newdata := map[string]any{}
+			for k, v := range m {
+				newdata[k] = v
+			}
+			data = newdata
+		}
+		t.jsvm.Set("global", data)
+		defer t.mu.Unlock()
+	}
+	if err := t.Template.Execute(&buf, data); err != nil {
+		return "", fmt.Errorf("template execution error: %w", err)
+	}
+	return strings.TrimSpace(buf.String()), nil
+}
+
 // Get a Go text template instance from tpl string.
 // If tpl starts with "@" char, treat it (the rest part after @) as a file name
 // and read template contents from it instead.
-func GetTemplate(tpl string, strict bool) (*template.Template, error) {
+func GetTemplate(tpl string, strict bool) (*Template, error) {
 	if strings.HasPrefix(tpl, "@") {
 		contents, err := os.ReadFile(tpl[1:])
 		if err != nil {
@@ -372,9 +440,31 @@ func GetTemplate(tpl string, strict bool) (*template.Template, error) {
 		}
 		tpl = string(contents)
 	}
-	templateInstance := template.New("template").Funcs(templateFuncs)
+	templateInstance := template.New("template").Funcs(templateFuncs).Funcs(additionalTemplateFuncs)
 	if strict {
 		templateInstance = templateInstance.Option("missingkey=error")
 	}
-	return templateInstance.Parse(tpl)
+	t, err := templateInstance.Parse(tpl)
+	var jsvm *goja.Runtime
+	if err != nil {
+		if strings.Contains(err.Error(), ` function "eval" not defined`) {
+			jsvm = goja.New()
+			new(require.Registry).Enable(jsvm)
+			console.Enable(jsvm)
+			templateInstance.Funcs(template.FuncMap{
+				"eval": func(input any) any {
+					v, e := util.Eval(jsvm, input)
+					if e != nil {
+						log.Printf("eval error: %v", e)
+					}
+					return v
+				},
+			})
+			t, err = templateInstance.Parse(tpl)
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &Template{Template: t, jsvm: jsvm}, nil
 }

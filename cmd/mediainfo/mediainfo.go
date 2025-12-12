@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"strings"
-	"text/template"
 
 	"github.com/natefinch/atomic"
 	"github.com/spf13/cobra"
@@ -73,12 +72,12 @@ func doMediainfo(cmd *cobra.Command, args []string) (err error) {
 	}
 	output := util.ToJson(mediaInfo)
 	if flagTemplate != "" {
-		var tpl *template.Template
+		var tpl *helper.Template
 		tpl, err = helper.GetTemplate(flagTemplate, true)
 		if err != nil {
 			return err
 		}
-		output, err = util.ExecTemplate(tpl, util.FromJson(output))
+		output, err = tpl.Exec(util.FromJson(output))
 		if err != nil {
 			return err
 		}

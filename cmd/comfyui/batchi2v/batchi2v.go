@@ -25,6 +25,7 @@ import (
 	"github.com/sagan/goaider/util"
 )
 
+// 部分模型不支持 JSON Schema。所以在 prompt 里也尽可能详细地描述输出 JSON 格式。
 const DEFAULT_PROMPT = `You are an expert in generating creative and detailed prompts for AI video and audio generation models.
 Your task is to analyze the provided image and generate a structured JSON output containing prompts for video and audio.
 
@@ -34,7 +35,8 @@ The output should be a JSON object which contains these fields:
 3.  "audio_prompt": (string) A detailed prompt for audio generation that complements the visual scene. Describe sounds, atmosphere, and any specific audio elements.
 4.  "audio_negative_prompt": (string) A negative prompt for audio generation, listing sounds to avoid.
 5.  "title_zh": (string) A very short (3-5 words) Simplified Chinese summary suitable for a filename. This should capture the essence of the video in a concise, filename-friendly way.
-`
+
+Output only JSON content, do not output any other content.`
 
 // Define the structure we want LLM to return
 type I2VResponse struct {

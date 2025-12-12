@@ -75,7 +75,7 @@ func doJq(cmd *cobra.Command, args []string) (err error) {
 			if err := json.Unmarshal([]byte(line), &data); err != nil {
 				return fmt.Errorf("failed to unmarshal json line: %w", err)
 			}
-			output, err := util.ExecTemplate(tpl, data)
+			output, err := tpl.Exec(data)
 			if err != nil {
 				return fmt.Errorf("template execute error: %w", err)
 			}
@@ -97,7 +97,7 @@ func doJq(cmd *cobra.Command, args []string) (err error) {
 	if err := json.Unmarshal(contents, &data); err != nil {
 		return fmt.Errorf("failed to unmarshal json: %w", err)
 	}
-	output, err := util.ExecTemplate(tpl, data)
+	output, err := tpl.Exec(data)
 	if err != nil {
 		return fmt.Errorf("template execute error: %w", err)
 	}

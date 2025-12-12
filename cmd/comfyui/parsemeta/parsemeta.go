@@ -77,11 +77,11 @@ func doParseMeta(cmd *cobra.Command, args []string) (err error) {
 
 	var output string
 	if flagTemplate != "" {
-		tmpl, err := helper.GetTemplate(flagTemplate, true)
+		tpl, err := helper.GetTemplate(flagTemplate, true)
 		if err != nil {
 			return fmt.Errorf("invalid template: %w", err)
 		}
-		output, err = util.ExecTemplate(tmpl, map[string]any{
+		output, err = tpl.Exec(map[string]any{
 			"workflow": meta.Workflow,
 			"prompt":   meta.Prompt,
 		})

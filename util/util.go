@@ -28,6 +28,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/dop251/goja"
 	"github.com/pelletier/go-toml/v2"
 	log "github.com/sirupsen/logrus"
 	"github.com/xxr3376/gtboard/pkg/ingest"
@@ -686,4 +687,68 @@ func DetectContentType(input io.Reader) (reader io.Reader, contentType string, e
 	reader = io.MultiReader(bytes.NewReader(buf[:n]), input)
 	contentType, _, _ = strings.Cut(http.DetectContentType(buf[:n]), ";")
 	return reader, contentType, nil
+}
+
+func ResolveGojaPromise(p *goja.Promise) (any, error) {
+	switch p.State() {
+	case goja.PromiseStateRejected:
+		return nil, fmt.Errorf("promise rejected: %v", p.Result().Export())
+	case goja.PromiseStateFulfilled:
+		return p.Result().Export(), nil
+	default:
+		return nil, fmt.Errorf("invalid promise")
+	}
+}
+
+// Convert input to string.
+// If input is nil, return empty string.
+// If input is string or []byte, return as it.
+// If input is a goja Promise, use it's resolved value.
+// Otherwise return fmt.Sprint(input).
+func ToString(input any) string {
+	if input == nil {
+		return ""
+	}
+	if gp, ok := input.(*goja.Promise); ok {
+		input, _ = ResolveGojaPromise(gp)
+		if input == nil {
+			return ""
+		}
+	}
+	switch value := input.(type) {
+	case string:
+		return value
+	case []byte:
+		return string(value)
+	default:
+		return fmt.Sprint(input)
+	}
+}
+
+// Eval a JavaScript code
+func Eval(vm *goja.Runtime, input any) (any, error) {
+	value, err := vm.RunString(ToString(input))
+	if err != nil {
+		return nil, err
+	}
+	if value == nil {
+		return nil, nil
+	}
+	v := value.Export()
+	if v == nil {
+		return nil, nil
+	}
+	if p, ok := v.(*goja.Promise); ok {
+		return ResolveGojaPromise(p)
+	}
+	return v, nil
+}
+
+// Shallow copy map[string]T to map[string]any.
+func Map2AnyMap[T any](m map[string]T) map[string]any {
+	anymap := map[string]any{}
+	for k, v := range m {
+		anymap[k] = v
+	}
+	return anymap
 }
