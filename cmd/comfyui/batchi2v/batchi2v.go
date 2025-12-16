@@ -67,22 +67,24 @@ Resume Example:
 }
 
 var (
-	flagForce       bool
-	flagNoPrompt    bool
-	flagBatch       int
-	flagTemperature float64
-	flagWorkflow    string
-	flagInput       string
-	flagOutput      string
-	flagModel       string
-	flagModelKey    string
-	flagPromptTmpl  string
-	flagResume      string
-	flagServer      []string
-	flagVars        []string
+	flagForce        bool
+	flagNoPrompt     bool
+	flagReverseOrder bool
+	flagBatch        int
+	flagTemperature  float64
+	flagWorkflow     string
+	flagInput        string
+	flagOutput       string
+	flagModel        string
+	flagModelKey     string
+	flagPromptTmpl   string
+	flagResume       string
+	flagServer       []string
+	flagVars         []string
 )
 
 func init() {
+	batchI2VCmd.Flags().BoolVar(&flagReverseOrder, "reverse-order", false, "Reverse input image files order")
 	batchI2VCmd.Flags().BoolVar(&flagForce, "force", false, "Force overwrite existing videos")
 	batchI2VCmd.Flags().IntVarP(&flagBatch, "batch", "b", 1, "Number of variations to generate per image")
 	batchI2VCmd.Flags().Float64VarP(&flagTemperature, "temperature", "T", 1.0, constants.HELP_TEMPERATURE_FLAG)
@@ -184,6 +186,9 @@ func doBatchI2V(cmd *cobra.Command, args []string) (err error) {
 		if !f.IsDir() && supportedExts[strings.ToLower(filepath.Ext(f.Name()))] {
 			validFiles = append(validFiles, f.Name())
 		}
+	}
+	if flagReverseOrder {
+		sort.Sort(sort.Reverse(sort.StringSlice(validFiles)))
 	}
 
 	// 2. Sort files to ensure deterministic order for resuming
