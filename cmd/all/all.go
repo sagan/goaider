@@ -25,4 +25,5 @@ import (
 	_ "github.com/sagan/goaider/cmd/structdiff"
 	_ "github.com/sagan/goaider/cmd/stt"
 	_ "github.com/sagan/goaider/cmd/translate"
+	_ "github.com/sagan/goaider/cmd/watch"
 )

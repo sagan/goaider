@@ -1,17 +1,12 @@
 package main
 
 import (
-	"os"
-	"runtime"
-
 	"github.com/sagan/goaider/cmd"
 	_ "github.com/sagan/goaider/cmd/all"
+	"github.com/sagan/goaider/features/osfeature"
 )
 
 func main() {
-	if runtime.GOOS == "windows" {
-		// https://github.com/golang/go/issues/43947
-		os.Setenv("NoDefaultCurrentDirectoryInExePath", "1")
-	}
+	osfeature.Init()
 	cmd.Execute()
 }
