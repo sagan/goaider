@@ -18,6 +18,7 @@ import (
 	"github.com/sagan/goaider/features/mediainfo"
 	"github.com/sagan/goaider/util"
 	log "github.com/sirupsen/logrus"
+	"github.com/vincent-petithory/dataurl"
 )
 
 //
@@ -57,6 +58,7 @@ type FileInfo struct {
 	Mdate          string         `json:"mdate"`           // modified date, "2006-01-02"
 	Sha256         string         `json:"sha256"`          // hex string (lower case)
 	Data           map[string]any `json:"data"`            // custom meta data
+	DataUrl        string         `json:"data_url"`        // raw file contents data url
 	MediaWidth     int            `json:"media_width"`     // media file width
 	MediaHeight    int            `json:"media_height"`    // media file height
 	MediaDuration  string         `json:"media_duration"`  // media file duration (seconds)
@@ -337,7 +339,8 @@ func shouldIgnore(filename string) bool {
 
 // doIndex scans the directory recursively and returns a list of FileInfo
 // allowedExts: if not nil, only index these extension (no dot) files
-func doIndex(dir string, allowedExts []string, noHash bool, parseMedia bool) (filelist FileList, err error) {
+func doIndex(dir string, allowedExts []string, noHash bool,
+	parseMedia bool, fillDataUrl bool) (filelist FileList, err error) {
 	filelist = make([]*FileInfo, 0)
 
 	err = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
@@ -419,6 +422,15 @@ func doIndex(dir string, allowedExts []string, noHash bool, parseMedia bool) (fi
 		}
 		if !mTime.Equal(time.Time{}) {
 			fi.Mdate = mTime.UTC().Format(constants.DATE_FORMAT)
+		}
+
+		if fillDataUrl && fi.Size > 0 {
+			data, err := os.ReadFile(path)
+			if err != nil {
+				log.Warnf("Warning: Could not generate data URL for file %s: %v\n", path, err)
+			} else {
+				fi.DataUrl = dataurl.EncodeBytes(data)
+			}
 		}
 
 		if parseMedia && fi.Size > 0 {

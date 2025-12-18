@@ -41,28 +41,31 @@ It outputs a csv with these columns (alphabetically sorted):
 
 Some additional columns:
 	- media info: media_width,media_height,media_duration
+	- raw contents: data_url (see below)
 
 The Go file info struct schema:
 
 type FileInfo struct {
-	Path     string         // full relative path, "foo/bar/baz.wav"
-	Name     string         // filename, "baz.wav"
-	DirPath  string         // parent dir relative path, "foo/bar", empty if file is in root path
-	DirName  string         // parent dir name, "bar", empty if file is in root path
-	Base     string         // "baz"
-	Ext      string         // ".wav"
-	ExtNodot string         // "wav"
-	Mime     string         // "audio/wav", empty if unknown
-	Size     int64          // 1024
-	Mtime    time.Time      // modified time. output to csv in "YYYY-MM-DDTHH:mm:ssZ" format
-	Mdate    string         // modified date, "2006-01-02"
-	Sha256   string         // hex string (lower case)
-	Data     map[string]any // custom meta data
-	MediaWidth    int       // media file width
-	MediaHeight   int       // media file height
-	MediaDuration string    // media file duration (seconds)
-	MediaCtime    time.Time // photo / video creation_time
-	MediaCdate    string    // photo / video creation date, "2006-01-02"
+	Path           string         // "path"            // full relative path, "foo/bar/baz.wav"
+	Name           string         // "name"            // filename, "baz.wav"
+	DirPath        string         // "dir_path"        // parent dir relative path, "foo/bar", empty if file is in root path
+	DirName        string         // "dir_name"        // parent dir name, "bar", empty if file is in root path
+	Base           string         // "base"            // "baz"
+	Ext            string         // "ext"             // ".wav"
+	ExtNodot       string         // "ext_nodot"       // "wav"
+	Mime           string         // "mime"            // "audio/wav", empty if unknown
+	Size           int64          // "size"            // file size
+	Mtime          time.Time      // "mtime"           // modified time
+	Mdate          string         // "mdate"           // modified date, "2006-01-02"
+	Sha256         string         // "sha256"          // sha256, hex string (lower case)
+	Data           map[string]any // "data"            // custom meta data
+	DataUrl        string         // "data_url"        // raw file contents data url
+	MediaWidth     int            // "media_width"     // media file width
+	MediaHeight    int            // "media_height"    // media file height
+	MediaDuration  string         // "media_duration"  // media file duration (seconds)
+	MediaSignature string         // "media_signature" // image signature (sha256 of pixel data)
+	MediaCtime     time.Time      // "media_ctime"     // photo / video creation_time from EXIF / meta
+	MediaCdate     string         // "media_cdate"     // photo / video creation date, "2006-01-02"
 }
 
 By default, the "data" field is empty map and not outputed to csv, unless the --include flag is set and
@@ -72,6 +75,9 @@ the former is string and the later is arbitary json type.
 The resolved values are included in output csv with column name of "data_txt", "data_json" or "data_json_*". E.g. :
   goaider indexfiles . --inludes "base,name,size,data.txt,data.json.field_foo"
 You can also define custom meta files use --meta flag.
+
+If the --includes flag contains a special "data_url" field, the raw file contents will be base64 encoded and stored
+in the "data_url" field. Warning: this may generate very large output, only use this with small data files.
 
 The outputed index only contains normal files, no folders.`,
 	Args: cobra.ExactArgs(1),
@@ -140,7 +146,7 @@ func indexfiles(cmd *cobra.Command, args []string) (err error) {
 
 	// check if --includes flag is valid
 	validFields := slices.DeleteFunc(util.Values(util.GetAllJSONTags(&FileInfo{})), func(s string) bool {
-		return s == "data"
+		return s == "data" || s == "data_url"
 	})
 	var includes []string
 	for _, include := range flagIncludes {
@@ -152,7 +158,7 @@ func indexfiles(cmd *cobra.Command, args []string) (err error) {
 			if keys[0] != "data" || metas[keys[1]] == "" {
 				return fmt.Errorf("invalid include field %q", include)
 			}
-		} else if !slices.Contains(validFields, include) {
+		} else if !slices.Contains(validFields, include) && include != "data_url" {
 			return fmt.Errorf("invalid include field %q", include)
 		}
 		includes = append(includes, include)
@@ -161,7 +167,11 @@ func indexfiles(cmd *cobra.Command, args []string) (err error) {
 		return fmt.Errorf("--includes flag has duplicate value(s)")
 	}
 
-	filelist, err := doIndex(inputDir, flagExtensions, flagNoHash, flagParseMedia)
+	fillDataUrl := slices.Contains(includes, "data_url")
+	if fillDataUrl {
+		log.Warnf(`Fill file contents as base64 data URL in "data_url" field. May generate very large output`)
+	}
+	filelist, err := doIndex(inputDir, flagExtensions, flagNoHash, flagParseMedia, fillDataUrl)
 	if err != nil {
 		return err
 	}
