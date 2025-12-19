@@ -30,7 +30,7 @@ const HELP_MODEL = `LLM model. It supports Gemini, OpenAI, OpenRouter, or any Op
 	`Gemini model (from cheapest to most expensive): ` +
 	`"gemini-2.0-flash-lite", "gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.5-pro". ` +
 	`OpenAI model (from cheapest to most expensive): "gpt-5-nano", "gpt-5-mini", "gpt-5.1". ` +
-	`OpenRouter model: "openrouter/<model-id>"; e.g. "openrouter/auto", "openrouter/amazon/nova-2-lite-v1:free". ` +
+	`OpenRouter model: "openrouter/<model-id>"; e.g. "openrouter/auto", "google/gemma-3-27b-it:free". ` +
 	`Any OpenAI API compatible model: "openai/<model-name>/<api-url>"; ` +
 	`e.g. "openai/gpt-oss-120b/http://localhost:8080/v1". ` +
 	`If not set, it uses ` + CONFIG_ENV_MODEL + ` env, then fallbacks to "` + DEFAULT_MODEL + `" by default`

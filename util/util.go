@@ -849,3 +849,17 @@ func UniqueSlice[T comparable](s []T) []T {
 	}
 	return unique
 }
+
+func GetEnvMap() map[string]string {
+	envMap := make(map[string]string)
+	for _, envVar := range os.Environ() {
+		// os.Environ() returns strings in the format "KEY=value"
+		// strings.Index finds the first occurrence of '='
+		if i := strings.Index(envVar, "="); i >= 0 {
+			key := envVar[:i]
+			value := envVar[i+1:]
+			envMap[key] = value
+		}
+	}
+	return envMap
+}

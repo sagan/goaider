@@ -21,6 +21,7 @@ import (
 	_ "github.com/sagan/goaider/cmd/rand"
 	_ "github.com/sagan/goaider/cmd/randb"
 	_ "github.com/sagan/goaider/cmd/randu"
+	_ "github.com/sagan/goaider/cmd/render"
 	_ "github.com/sagan/goaider/cmd/sha1sum"
 	_ "github.com/sagan/goaider/cmd/sha256sum"
 	_ "github.com/sagan/goaider/cmd/sovits-genlist"

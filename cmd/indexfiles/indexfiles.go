@@ -21,8 +21,9 @@ import (
 )
 
 var (
+	flagIncludeRoot bool
 	flagNoRecursive bool
-	flagIndexDirs   bool
+	flagIncludeDirs bool
 	flagNoHash      bool
 	flagForce       bool
 	flagParseMedia  bool // parse media file meta info
@@ -62,7 +63,7 @@ type FileInfo struct {
 	Mime           string         // "mime"            // "audio/wav", empty if unknown
 	MimeType       string         // "mime_type"       // "audio"
 	MimeSubtype    string         // "mime_subtype"    // "wav"
-	Size           int64          // "size"            // Changed from int to int64 to match os.FileInfo
+	Size           int64          // "size"            // file size
 	Mtime          time.Time      // "mtime"           // modified time
 	Mdate          string         // "mdate"           // modified date, "2006-01-02"
 	Md5            string         // "md5"             // hex string (lower case)
@@ -101,8 +102,11 @@ By default the outputed index only contains normal files, folders are not indexe
 
 func init() {
 	cmd.RootCmd.AddCommand(indexfilesCmd)
-	indexfilesCmd.Flags().BoolVarP(&flagNoRecursive, "no-recursive", "R", false, "Do not index subdirectories")
-	indexfilesCmd.Flags().BoolVarP(&flagIndexDirs, "index-dirs", "D", false, `Index directories as well. `+
+	indexfilesCmd.Flags().BoolVarP(&flagIncludeRoot, "include-root", "R", false,
+		`Include the root directory itself in the index. Implies --index-dirs. `+
+			`If set, the root dir itself will have 0 depth, the files of root dir will have 1 depth`)
+	indexfilesCmd.Flags().BoolVarP(&flagNoRecursive, "no-recursive", "S", false, "Do not index subdirectories")
+	indexfilesCmd.Flags().BoolVarP(&flagIncludeDirs, "include-dirs", "D", false, `Index directories as well. `+
 		`The dir will have "`+constants.MIME_DIR+`" mime and zero (0) size. `+
 		`It's guaranteed that dirs appeared before their content files in result csv`)
 	indexfilesCmd.Flags().BoolVarP(&flagParseMedia, "parse-media", "M", false,
@@ -117,7 +121,7 @@ func init() {
 	indexfilesCmd.Flags().StringVarP(&flagOutput, "output", "o", "-", `Output file path. Use "-" for stdout`)
 	indexfilesCmd.Flags().StringSliceVarP(&flagIncludes, "includes", "I", nil, `Includes fields, comma-separated. `+
 		`Special values: "data.txt", "data.json", "data.json.*", "data.*". `+
-		`The "*" means all but "data" fields; it's also the default value if this flag is not set`)
+		`The "*" means all but "data" / "data_*" fields; it's also the default value if this flag is not set`)
 	indexfilesCmd.Flags().StringSliceVarP(&flagExtensions, "extensions", "", nil,
 		"Only Index file of extensions, comma-separated")
 	indexfilesCmd.Flags().StringArrayVarP(&flagMetas, "meta", "", nil,
@@ -136,6 +140,9 @@ func indexfiles(cmd *cobra.Command, args []string) (err error) {
 		if exists, err := util.FileExists(flagOutput); err != nil || (exists && !flagForce) {
 			return fmt.Errorf("output file %q exists or can't access, err=%w", flagOutput, err)
 		}
+	}
+	if flagIncludeRoot {
+		flagIncludeDirs = true
 	}
 	argInput := args[0]
 	flagPrefix = strings.TrimSuffix(flagPrefix, "_")
@@ -214,7 +221,8 @@ func indexfiles(cmd *cobra.Command, args []string) (err error) {
 	filelist, err := doIndex(inputDir, IndexOptions{
 		AllowedExts: flagExtensions,
 		NoRecursive: flagNoRecursive,
-		IndexDirs:   flagIndexDirs,
+		IncludeRoot: flagIncludeRoot,
+		IncludeDirs: flagIncludeDirs,
 		NoHash:      flagNoHash,
 		ParseMedia:  flagParseMedia,
 		FillDataUrl: fillDataUrl,

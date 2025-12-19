@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -27,9 +28,11 @@ import (
 // These are common temporary or system-generated files that are usually not relevant for indexing.
 
 var IgnoreFilenames = []string{
-	".DS_Store",   // macOS directory metadata
-	"Thumbs.db",   // Windows thumbnail cache
-	"desktop.ini", // Windows folder customization
+	"$Recycle.Bin",              // Windows Recycle bin
+	"System Volume Information", // Windows Drive root hidden
+	".DS_Store",                 // macOS directory metadata
+	"Thumbs.db",                 // Windows thumbnail cache
+	"desktop.ini",               // Windows folder customization
 }
 
 var IgnoreFilenameSuffixes = []string{
@@ -349,11 +352,11 @@ func shouldIgnore(filename string) bool {
 	return false
 }
 
-// allowedExts []string, noRecursive bool, indexDirs bool, noHash bool,  parseMedia bool, fillDataUrl bool
 type IndexOptions struct {
 	AllowedExts []string // if not nil, only index these extension (no dot) files
 	NoRecursive bool
-	IndexDirs   bool
+	IncludeRoot bool
+	IncludeDirs bool
 	NoHash      bool
 	ParseMedia  bool
 	FillDataUrl bool
@@ -365,6 +368,22 @@ type IndexOptions struct {
 // allowedExts: if not nil, only index these extension (no dot) files
 func doIndex(dir string, options IndexOptions) (filelist FileList, err error) {
 	filelist = make([]*FileInfo, 0)
+
+	// Note: it must handle a lot of edge cases carefully. E.g. dir is "/" or "C:\".
+
+	rootBaseName := filepath.Base(dir)
+	if rootBaseName == `\` { // if dir is Windows drive root like "C:\"
+		rootBaseName = "/"
+	}
+	maxDepth := math.MaxInt
+	if options.NoRecursive {
+		maxDepth = 0
+		if options.IncludeRoot {
+			maxDepth++
+		}
+	} else if options.MaxDepth >= 0 {
+		maxDepth = options.MaxDepth
+	}
 
 	err = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -380,9 +399,30 @@ func doIndex(dir string, options IndexOptions) (filelist FileList, err error) {
 		}
 		fullPath = filepath.ToSlash(fullPath)
 		if fullPath == "." { // root dir itself
-			return nil
+			if !options.IncludeRoot {
+				return nil
+			}
+			fullPath = ""
 		}
+		if options.IncludeRoot {
+			if rootBaseName == "/" {
+				fullPath = rootBaseName + fullPath
+			} else if fullPath != "" {
+				fullPath = rootBaseName + "/" + fullPath
+			} else {
+				fullPath = rootBaseName
+			}
+		}
+
 		depth := strings.Count(fullPath, "/")
+		if fullPath == "/" {
+			depth = 0 // special case
+		}
+
+		fileName := d.Name()
+		if fileName == `\` {
+			fileName = "/" // the root dir is the only case that name contains path sep
+		}
 
 		// Skip directories, hidden files and temporary or os files
 		if shouldIgnore(d.Name()) {
@@ -390,19 +430,20 @@ func doIndex(dir string, options IndexOptions) (filelist FileList, err error) {
 				return filepath.SkipDir
 			}
 			return nil
-		} else if d.IsDir() && !options.IndexDirs {
-			if options.NoRecursive || (options.MaxDepth >= 0 && depth >= options.MaxDepth) {
+		} else if d.IsDir() && !options.IncludeDirs {
+			if depth >= maxDepth {
 				return filepath.SkipDir
 			}
 			return nil
+		} else if !d.IsDir() && !d.Type().IsRegular() {
+			log.Debugf("Ignore non-regular file %s", path)
+			return nil // Skip symlinks, devices, etc.
 		}
 
 		info, err := d.Info()
 		if err != nil {
 			return err
 		}
-
-		fileName := d.Name()
 
 		parentDir, err := filepath.Rel(dir, filepath.Dir(path))
 		if err != nil {
@@ -520,7 +561,7 @@ func doIndex(dir string, options IndexOptions) (filelist FileList, err error) {
 
 		filelist = append(filelist, fi)
 
-		if info.IsDir() && (options.NoRecursive || options.MaxDepth >= 0 && depth >= options.MaxDepth) {
+		if info.IsDir() && depth >= maxDepth {
 			return filepath.SkipDir
 		}
 		return nil
