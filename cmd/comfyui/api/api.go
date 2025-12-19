@@ -20,6 +20,7 @@ import (
 	"github.com/richinsley/comfy2go/graphapi"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/sagan/goaider/constants"
 	"github.com/sagan/goaider/util"
 	"github.com/sagan/goaider/util/pathutil"
 )
@@ -172,7 +173,7 @@ func (comfyClient *Client) PrepareGraph(graph *graphapi.Graph) (err error) {
 			log.Warnf("node %d (LoadImage) has no filename in widget values", node.ID)
 			continue
 		}
-		hash, err := util.Sha256sumFile(filename, false)
+		hash, err := util.HashFile(filename, constants.HASH_SHA256, false)
 		if err != nil {
 			return fmt.Errorf("failed to calc input image %q hash: %w", filename, err)
 		}

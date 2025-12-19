@@ -3,7 +3,9 @@ package util
 import (
 	"bytes"
 	"cmp"
+	"crypto/md5"
 	"crypto/rand"
+	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/csv"
@@ -11,6 +13,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"io/fs"
 	"math"
@@ -30,6 +33,7 @@ import (
 
 	"github.com/dop251/goja"
 	"github.com/pelletier/go-toml/v2"
+	"github.com/sagan/goaider/constants"
 	log "github.com/sirupsen/logrus"
 	"github.com/xxr3376/gtboard/pkg/ingest"
 	"golang.org/x/exp/constraints"
@@ -590,18 +594,53 @@ func RandInt(min, max int64) int64 {
 	return min + i.Int64()
 }
 
-func Sha256sumFile(filename string, hex bool) (string string, err error) {
+func HashFileAllHashes(filename string) (md5_hex, sha1_hex, sha256_hex string, err error) {
+	f, err := os.Open(filename)
+	if err != nil {
+		return "", "", "", err
+	}
+	defer f.Close()
+
+	hMd5 := md5.New()
+	hSha1 := sha1.New()
+	hSha256 := sha256.New()
+
+	// Create a MultiWriter to write to all hash functions simultaneously
+	mw := io.MultiWriter(hMd5, hSha1, hSha256)
+
+	if _, err := io.Copy(mw, f); err != nil {
+		return "", "", "", err
+	}
+
+	md5_hex = fmt.Sprintf("%x", hMd5.Sum(nil))
+	sha1_hex = fmt.Sprintf("%x", hSha1.Sum(nil))
+	sha256_hex = fmt.Sprintf("%x", hSha256.Sum(nil))
+
+	return md5_hex, sha1_hex, sha256_hex, nil
+}
+
+func HashFile(filename string, hashType string, hex bool) (sha256 string, err error) {
 	f, err := os.Open(filename)
 	if err != nil {
 		return "", err
 	}
 	defer f.Close()
-	return Sha256sum(f, hex)
+	return Hash(f, hashType, hex)
 }
 
 // If hex is true, return hex string; otherwise return URL-safe base64
-func Sha256sum(input io.Reader, hex bool) (string string, err error) {
-	h := sha256.New()
+func Hash(input io.Reader, hashType string, hex bool) (string string, err error) {
+	var h hash.Hash
+	switch hashType {
+	case constants.HASH_SHA256:
+		h = sha256.New()
+	case constants.HASH_MD5:
+		h = md5.New()
+	case constants.HASH_SHA1:
+		h = sha1.New()
+	default:
+		return "", fmt.Errorf("unsupported hash type: %s", hashType)
+	}
 	if _, err := io.Copy(h, input); err != nil {
 		return "", err
 	}
@@ -669,24 +708,68 @@ func GetMimeType(filename string) string {
 
 // Detect input content type of input.
 // It always return a reader that read original input contents.
-// If err is nil, it returns a valid MIME type.
+// If err is nil, it returns a valid full content type (e.g. "text/plain; charset=utf-8");
+// all text files will be "text/plain" type. It tries to detect UTF-8 (w/o BOM), UTF-16 LE / BE with BOM.
 // if returns an err only when input read error.
 func DetectContentType(input io.Reader) (reader io.Reader, contentType string, err error) {
 	buf := make([]byte, 512)
-	n, err := io.ReadFull(input, buf)
-	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+	n, readErr := io.ReadFull(input, buf)
+
+	// Handle errors from ReadFull: we only treat these as fatal if they aren't "short read" cases.
+	if readErr != nil && readErr != io.EOF && readErr != io.ErrUnexpectedEOF {
 		if n > 0 {
-			return io.MultiReader(bytes.NewReader(buf[:n]), input), "", err
+			return io.MultiReader(bytes.NewReader(buf[:n]), input), "", readErr
 		}
-		return input, "", err
+		return input, "", readErr
 	}
+
 	if n == 0 {
+		// Empty stream: choose a default. (Could also be "text/plain; charset=utf-8" depending on your use case.)
 		return input, "application/octet-stream", nil
 	}
-	// Create a new reader that combines the peeked bytes and the original reader
-	reader = io.MultiReader(bytes.NewReader(buf[:n]), input)
-	contentType, _, _ = strings.Cut(http.DetectContentType(buf[:n]), ";")
+
+	peek := buf[:n]
+
+	// Always reconstruct a reader that includes the peeked bytes.
+	reader = io.MultiReader(bytes.NewReader(peek), input)
+
+	// 1) BOM-based Unicode detection (reliable and explicit)
+	if ct, ok := detectUnicodeBOM(peek); ok {
+		return reader, ct, nil
+	}
+
+	// 2) Fallback to Go's MIME sniffing heuristic
+	contentType = http.DetectContentType(peek)
 	return reader, contentType, nil
+}
+
+func detectUnicodeBOM(b []byte) (contentType string, ok bool) {
+	// UTF-8 BOM: EF BB BF
+	if len(b) >= 3 && b[0] == 0xEF && b[1] == 0xBB && b[2] == 0xBF {
+		return "text/plain; charset=utf-8", true
+	}
+
+	// UTF-32 BOMs (check before UTF-16 because they start with 2-byte patterns too)
+	// UTF-32LE BOM: FF FE 00 00
+	// if len(b) >= 4 && b[0] == 0xFF && b[1] == 0xFE && b[2] == 0x00 && b[3] == 0x00 {
+	// 	return "text/plain; charset=utf-32le", true
+	// }
+	// UTF-32BE BOM: 00 00 FE FF
+	// if len(b) >= 4 && b[0] == 0x00 && b[1] == 0x00 && b[2] == 0xFE && b[3] == 0xFF {
+	// 	return "text/plain; charset=utf-32be", true
+	// }
+
+	// UTF-16 BOMs
+	// UTF-16LE BOM: FF FE
+	if len(b) >= 2 && b[0] == 0xFF && b[1] == 0xFE {
+		return "text/plain; charset=utf-16le", true
+	}
+	// UTF-16BE BOM: FE FF
+	if len(b) >= 2 && b[0] == 0xFE && b[1] == 0xFF {
+		return "text/plain; charset=utf-16be", true
+	}
+
+	return "", false
 }
 
 func ResolveGojaPromise(p *goja.Promise) (any, error) {
@@ -751,4 +834,18 @@ func Map2AnyMap[T any](m map[string]T) map[string]any {
 		anymap[k] = v
 	}
 	return anymap
+}
+
+// unique slice s, preserving original order.
+func UniqueSlice[T comparable](s []T) []T {
+	seen := make(map[T]bool)
+	var unique []T
+
+	for _, item := range s {
+		if _, ok := seen[item]; !ok {
+			seen[item] = true
+			unique = append(unique, item)
+		}
+	}
+	return unique
 }

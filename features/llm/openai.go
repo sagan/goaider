@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/invopop/jsonschema"
@@ -33,8 +34,43 @@ type OpenAIChatRequest struct {
 	Stream         bool                  `json:"stream,omitempty"`
 }
 
+// Return full text prompt.
+// Return an error if request contains binary data
+func (req *OpenAIChatRequest) GetFullPrompt(sep string) (string, error) {
+	includeRole := slices.ContainsFunc(req.Messages, func(m *OpenAIMessage) bool {
+		return m.Role != "user"
+	})
+	var fullPrompt strings.Builder
+	for i, msg := range req.Messages {
+		if i > 0 {
+			fullPrompt.WriteString(sep)
+		}
+		if includeRole {
+			fullPrompt.WriteString(fmt.Sprintf("%s:\n\n", msg.Role))
+		}
+		switch content := msg.Content.(type) {
+		case string:
+			fullPrompt.WriteString(strings.TrimSpace(content))
+		case []OpenAIContentPart:
+			for _, part := range content {
+				switch part.Type {
+				case "text":
+					fullPrompt.WriteString(strings.TrimSpace(part.Text))
+				case "image_url":
+					// Cannot represent image in text prompt
+					return "", fmt.Errorf("cannot get full text prompt: request contains image data")
+				}
+			}
+		default:
+			return "", fmt.Errorf("unknown content type in message")
+		}
+	}
+	fullPrompt.WriteRune('\n')
+	return fullPrompt.String(), nil
+}
+
 type OpenAIMessage struct {
-	Role    string `json:"role"`
+	Role    string `json:"role"`    // user, assistant, system, tool
 	Content any    `json:"content"` // Can be string or []OpenAIContentPart
 }
 

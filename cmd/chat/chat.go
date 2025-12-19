@@ -14,6 +14,7 @@ import (
 	"github.com/invopop/jsonschema"
 	jsonschemaValidator "github.com/kaptinlin/jsonschema"
 	"github.com/natefinch/atomic"
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/vincent-petithory/dataurl"
 	"golang.org/x/term"
@@ -24,6 +25,8 @@ import (
 	"github.com/sagan/goaider/features/clipboard"
 	"github.com/sagan/goaider/features/llm"
 	"github.com/sagan/goaider/util"
+	"github.com/sagan/goaider/util/helper"
+	"github.com/sagan/goaider/util/stringutil"
 )
 
 var chatCmd = &cobra.Command{
@@ -43,23 +46,29 @@ Running "goaider chat" without providing any input will open a simple interactiv
 }
 
 var (
-	flagForce       bool
-	flagAutoCopy    bool // auto copy LLM response text to clipboard
-	flagTemperature float64
-	flagOutput      string // output file, "-" for stdout (default)
-	flagModel       string
-	flagModelKey    string
-	flagSchema      string   // response json schema file
-	flagInputs      []string // input file
+	flagIncludeFilename bool
+	flagOutputPrompt    bool // output generated full text prompt only
+	flagForce           bool
+	flagAutoCopy        bool // auto copy LLM response text to clipboard
+	flagTemperature     float64
+	flagOutput          string // output file, "-" for stdout (default)
+	flagModel           string
+	flagModelKey        string
+	flagSchema          string   // response json schema file
+	flagInputs          []string // input file
 )
 
 func init() {
+	chatCmd.Flags().BoolVarP(&flagIncludeFilename, "include-filename", "F", false,
+		"Include filename in prompt for each input file. Only work for text files")
+	chatCmd.Flags().BoolVarP(&flagOutputPrompt, "output-prompt", "P", false,
+		"Don't talk to LLM. Instead, output generated full text prompt only")
 	chatCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Force overwriting without confirmation")
 	chatCmd.Flags().BoolVarP(&flagAutoCopy, "auto-copy", "C", false, `Auto copy LLM response text to clipboard. `+
-		`It works on Windows only`)
-	chatCmd.Flags().Float64VarP(&flagTemperature, "temperature", "T", 1.0,
-		"The temperature to use for the model. Range 0.0-2.0. Lower is deterministic; Higher is creative")
-	chatCmd.Flags().StringVarP(&flagOutput, "output", "o", "-", `Output file path. Use "-" for stdout`)
+		`If --output-prompt is set, copy prompt instead. It works on Windows only`)
+	chatCmd.Flags().Float64VarP(&flagTemperature, "temperature", "T", 1.0, constants.HELP_TEMPERATURE_FLAG)
+	chatCmd.Flags().StringVarP(&flagOutput, "output", "o", "-", `Output file path. Use "-" for stdout. `+
+		`Set to "`+constants.NULL+`" to mute, which is useful with --auto-copy flag`)
 	chatCmd.Flags().StringVarP(&flagModel, "model", "", "", "The model to use. "+constants.HELP_MODEL)
 	chatCmd.Flags().StringVarP(&flagModelKey, "model-key", "", "", constants.HELP_MODEL_KEY)
 	chatCmd.Flags().StringVarP(&flagSchema, "schema", "", "",
@@ -79,7 +88,9 @@ func doChat(cmd *cobra.Command, args []string) (err error) {
 	if flagModel == "" {
 		flagModel = config.GetDefaultModel()
 	}
-	cmd.Printf("Use %q model\n", flagModel)
+	if !flagOutputPrompt {
+		cmd.Printf("Use %q model\n", flagModel)
+	}
 	argInput := ""
 	if len(args) > 0 {
 		argInput = args[0]
@@ -137,6 +148,78 @@ func doChat(cmd *cobra.Command, args []string) (err error) {
 			return fmt.Errorf("output file %q exists or access failed. err: %w", flagOutput, err)
 		}
 	}
+
+	openaiReq.Messages = nil
+	inputFiles := helper.ParseFilenameArgs(flagInputs...)
+	for _, inputFile := range inputFiles {
+		var input io.Reader
+		if inputFile == "-" {
+			input = cmd.InOrStdin()
+		} else {
+			f, err := os.Open(inputFile)
+			if err != nil {
+				return fmt.Errorf("failed to open input file %q: %w", inputFile, err)
+			}
+			defer f.Close()
+			input = f
+		}
+		input, contentType, err := util.DetectContentType(input)
+		if err != nil {
+			return fmt.Errorf("failed to detect input file %q type: %w", inputFile, err)
+		}
+		if strings.HasPrefix(contentType, "text/") {
+			input = stringutil.GetTextReader(input)
+		}
+		fileBytes, err := io.ReadAll(input)
+		if err != nil {
+			return fmt.Errorf("failed to read input file %q: %w", inputFile, err)
+		}
+		if utf8.Valid(fileBytes) {
+			var content strings.Builder
+			if flagIncludeFilename {
+				content.WriteString(fmt.Sprintf("%s:\n\n>>>>>\n", inputFile))
+			}
+			content.Write(fileBytes)
+			if flagIncludeFilename {
+				content.WriteString("\n<<<<<\n")
+			}
+			openaiReq.Messages = append(openaiReq.Messages, &llm.OpenAIMessage{
+				Role:    "user",
+				Content: content.String(),
+			})
+		} else {
+			openaiReq.Messages = append(openaiReq.Messages, &llm.OpenAIMessage{
+				Role: "user",
+				Content: []llm.OpenAIContentPart{{
+					Type:     "image_url",
+					ImageUrl: &llm.OpenAIImageUrl{Url: dataurl.EncodeBytes(fileBytes)}}},
+			})
+		}
+	}
+	if argInput != "" {
+		openaiReq.Messages = append(openaiReq.Messages, &llm.OpenAIMessage{
+			Role:    "user",
+			Content: argInput,
+		})
+	}
+
+	if flagOutputPrompt {
+		fullPrompt, err := openaiReq.GetFullPrompt("\n\n----------\n\n")
+		if err != nil {
+			return err
+		}
+		if flagOutput == "-" {
+			_, err = io.Copy(cmd.OutOrStdout(), strings.NewReader(fullPrompt))
+		} else if flagOutput != constants.NULL {
+			err = atomic.WriteFile(flagOutput, strings.NewReader(fullPrompt))
+		}
+		if flagAutoCopy {
+			clipboard.CopyString(fullPrompt)
+		}
+		log.Printf("Generated prompt: %d bytes UTF-8 string", len(fullPrompt))
+		return err
+	}
+
 	var schemaValidator *jsonschemaValidator.Schema
 	if flagSchema != "" {
 		schemaBytes, err := os.ReadFile(flagSchema)
@@ -161,43 +244,7 @@ func doChat(cmd *cobra.Command, args []string) (err error) {
 			},
 		}
 	}
-	openaiReq.Messages = nil
-	for _, inputFile := range flagInputs {
-		var input io.Reader
-		if inputFile == "-" {
-			input = cmd.InOrStdin()
-		} else {
-			f, err := os.Open(inputFile)
-			if err != nil {
-				return fmt.Errorf("failed to open input file %q: %w", inputFile, err)
-			}
-			defer f.Close()
-			input = f
-		}
-		fileBytes, err := io.ReadAll(input)
-		if err != nil {
-			return fmt.Errorf("failed to read input file %q: %w", inputFile, err)
-		}
-		if utf8.Valid(fileBytes) {
-			openaiReq.Messages = append(openaiReq.Messages, &llm.OpenAIMessage{
-				Role:    "user",
-				Content: string(fileBytes),
-			})
-		} else {
-			openaiReq.Messages = append(openaiReq.Messages, &llm.OpenAIMessage{
-				Role: "user",
-				Content: []llm.OpenAIContentPart{{
-					Type:     "image_url",
-					ImageUrl: &llm.OpenAIImageUrl{Url: dataurl.EncodeBytes(fileBytes)}}},
-			})
-		}
-	}
-	if argInput != "" {
-		openaiReq.Messages = append(openaiReq.Messages, &llm.OpenAIMessage{
-			Role:    "user",
-			Content: argInput,
-		})
-	}
+
 	response := strings.Builder{}
 	responseStr := ""
 	reader, writer := io.Pipe()
@@ -222,7 +269,7 @@ func doChat(cmd *cobra.Command, args []string) (err error) {
 	}()
 	if flagOutput == "-" {
 		_, err = io.Copy(cmd.OutOrStdout(), reader)
-	} else {
+	} else if flagOutput != constants.NULL {
 		err = atomic.WriteFile(flagOutput, reader)
 	}
 	if err != nil {

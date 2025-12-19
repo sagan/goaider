@@ -17,6 +17,7 @@ import (
 	"github.com/sagan/goaider/constants"
 	"github.com/sagan/goaider/features/mediainfo"
 	"github.com/sagan/goaider/util"
+	"github.com/sagan/goaider/util/stringutil"
 	log "github.com/sirupsen/logrus"
 	"github.com/vincent-petithory/dataurl"
 )
@@ -32,6 +33,10 @@ var IgnoreFilenames = []string{
 }
 
 var IgnoreFilenameSuffixes = []string{
+	".td", // 迅雷下载临时文件
+	".td.cfg",
+	".thunder",
+	".xltd",
 	".partial",     // rclone transfer temporary file
 	".fuse_hidden", // fuse filesystem temporary file
 	".crdownload",  // Chrome partial download
@@ -50,20 +55,27 @@ type FileInfo struct {
 	DirPath        string         `json:"dir_path"`        // parent dir relative path, "foo/bar", empty if file is in root path
 	DirName        string         `json:"dir_name"`        // parent dir name, "bar", empty if file is in root path
 	Base           string         `json:"base"`            // "baz"
+	Type           string         `json:"type"`            // normal file: "-"; dir: "d"
+	Depth          int            `json:"depth"`           // directory level, 0 for files of root dir
 	Ext            string         `json:"ext"`             // ".wav"
 	ExtNodot       string         `json:"ext_nodot"`       // "wav"
 	Mime           string         `json:"mime"`            // "audio/wav", empty if unknown
+	MimeType       string         `json:"mime_type"`       // "audio"
+	MimeSubtype    string         `json:"mime_subtype"`    // "wav"
 	Size           int64          `json:"size"`            // Changed from int to int64 to match os.FileInfo
 	Mtime          time.Time      `json:"mtime"`           // modified time
 	Mdate          string         `json:"mdate"`           // modified date, "2006-01-02"
+	Md5            string         `json:"md5"`             // hex string (lower case)
+	Sha1           string         `json:"sha1"`            // hex string (lower case)
 	Sha256         string         `json:"sha256"`          // hex string (lower case)
 	Data           map[string]any `json:"data"`            // custom meta data
 	DataUrl        string         `json:"data_url"`        // raw file contents data url
+	DataRaw        string         `json:"data_raw"`        // raw file contents (for text files only)
 	MediaWidth     int            `json:"media_width"`     // media file width
 	MediaHeight    int            `json:"media_height"`    // media file height
 	MediaDuration  string         `json:"media_duration"`  // media file duration (seconds)
 	MediaSignature string         `json:"media_signature"` // image signature (sha256 of pixel data)
-	MediaCtime     time.Time      `json:"media_ctime"`     // photo / video creation_time from EXIF / meta
+	MediaCtime     time.Time      `json:"media_ctime"`     // photo / video creation time from EXIF / meta
 	MediaCdate     string         `json:"media_cdate"`     // photo / video creation date, "2006-01-02"
 }
 
@@ -337,10 +349,21 @@ func shouldIgnore(filename string) bool {
 	return false
 }
 
+// allowedExts []string, noRecursive bool, indexDirs bool, noHash bool,  parseMedia bool, fillDataUrl bool
+type IndexOptions struct {
+	AllowedExts []string // if not nil, only index these extension (no dot) files
+	NoRecursive bool
+	IndexDirs   bool
+	NoHash      bool
+	ParseMedia  bool
+	FillDataUrl bool
+	FillDataRaw bool // fill raw file contents (for text files only)
+	MaxDepth    int
+}
+
 // doIndex scans the directory recursively and returns a list of FileInfo
 // allowedExts: if not nil, only index these extension (no dot) files
-func doIndex(dir string, allowedExts []string, noHash bool,
-	parseMedia bool, fillDataUrl bool) (filelist FileList, err error) {
+func doIndex(dir string, options IndexOptions) (filelist FileList, err error) {
 	filelist = make([]*FileInfo, 0)
 
 	err = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
@@ -349,13 +372,28 @@ func doIndex(dir string, allowedExts []string, noHash bool,
 			return err
 		}
 
+		// Calculate Path Strings
+		// We use filepath.ToSlash to ensure forward slashes even on Windows for consistency
+		fullPath, err := filepath.Rel(dir, path)
+		if err != nil {
+			return err
+		}
+		fullPath = filepath.ToSlash(fullPath)
+		if fullPath == "." { // root dir itself
+			return nil
+		}
+		depth := strings.Count(fullPath, "/")
+
 		// Skip directories, hidden files and temporary or os files
-		if d.IsDir() {
-			if shouldIgnore(d.Name()) {
+		if shouldIgnore(d.Name()) {
+			if d.IsDir() {
 				return filepath.SkipDir
 			}
 			return nil
-		} else if shouldIgnore(d.Name()) {
+		} else if d.IsDir() && !options.IndexDirs {
+			if options.NoRecursive || (options.MaxDepth >= 0 && depth >= options.MaxDepth) {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 
@@ -364,13 +402,6 @@ func doIndex(dir string, allowedExts []string, noHash bool,
 			return err
 		}
 
-		// 1. Calculate Path Strings
-		// We use filepath.ToSlash to ensure forward slashes even on Windows for consistency
-		fullPath, err := filepath.Rel(dir, path)
-		if err != nil {
-			return err
-		}
-		fullPath = filepath.ToSlash(fullPath)
 		fileName := d.Name()
 
 		parentDir, err := filepath.Rel(dir, filepath.Dir(path))
@@ -389,42 +420,56 @@ func doIndex(dir string, allowedExts []string, noHash bool,
 		base := strings.TrimSuffix(fileName, ext)
 		extNoDot := strings.TrimPrefix(ext, ".")
 
-		if allowedExts != nil && !slices.Contains(allowedExts, extNoDot) {
+		if !info.IsDir() && options.AllowedExts != nil && !slices.Contains(options.AllowedExts, extNoDot) {
 			return nil
 		}
 
 		// 3. Time Metadata
 		mTime := info.ModTime()
 
-		hash := ""
-		if !noHash {
+		var md5, sha1, sha256 string
+		if !options.NoHash && !info.IsDir() {
 			// 4. Calculate SHA256
-			hash, err = util.Sha256sumFile(path, true)
+			md5, sha1, sha256, err = util.HashFileAllHashes(path)
 			if err != nil {
 				return err
 			}
 		}
 
+		fileType := "d"
+		fileSize := int64(0)
+		fileMime := constants.MIME_DIR
+		if !d.IsDir() {
+			fileType = "-"
+			fileSize = info.Size()
+			fileMime = util.GetMimeType(fileName)
+		}
+		fileMimeType, fileMimeSubType, _ := strings.Cut(fileMime, "/")
+
 		// 5. Populate Struct
 		fi := &FileInfo{
-			Path:     fullPath,
-			Name:     fileName,
-			DirPath:  parentDir,
-			DirName:  parentDirName,
-			Base:     base,
-			Ext:      ext,
-			ExtNodot: extNoDot,
-			Mime:     util.GetMimeType(fileName),
-			Size:     info.Size(),
-			Mtime:    mTime,
-			Sha256:   hash,
-			Data:     map[string]any{},
-		}
-		if !mTime.Equal(time.Time{}) {
-			fi.Mdate = mTime.UTC().Format(constants.DATE_FORMAT)
+			Path:        fullPath,
+			Name:        fileName,
+			DirPath:     parentDir,
+			DirName:     parentDirName,
+			Type:        fileType,
+			Depth:       depth,
+			Base:        base,
+			Ext:         ext,
+			ExtNodot:    extNoDot,
+			Mime:        fileMime,
+			MimeType:    fileMimeType,
+			MimeSubtype: fileMimeSubType,
+			Size:        fileSize,
+			Mtime:       mTime,
+			Mdate:       mTime.UTC().Format(constants.DATE_FORMAT),
+			Md5:         md5,
+			Sha1:        sha1,
+			Sha256:      sha256,
+			Data:        map[string]any{},
 		}
 
-		if fillDataUrl && fi.Size > 0 {
+		if options.FillDataUrl && fi.Size > 0 {
 			data, err := os.ReadFile(path)
 			if err != nil {
 				log.Warnf("Warning: Could not generate data URL for file %s: %v\n", path, err)
@@ -433,10 +478,31 @@ func doIndex(dir string, allowedExts []string, noHash bool,
 			}
 		}
 
-		if parseMedia && fi.Size > 0 {
+		if options.FillDataRaw && fi.Size > 0 {
 			file, err := os.Open(path)
-			if err == nil {
-				defer file.Close()
+			if err != nil {
+				log.Warnf("Warning: Could not open file %s for raw data: %v\n", path, err)
+			} else {
+				reader, contentType, err := util.DetectContentType(file)
+				if err != nil {
+					log.Warnf("Warning: Could not detect content type for file %s: %v\n", path, err)
+				} else if strings.HasPrefix(contentType, "text/") {
+					contents, err := io.ReadAll(stringutil.GetTextReader(reader))
+					if err != nil {
+						log.Warnf("Warning: Could not read raw data for file %s: %v\n", path, err)
+					} else {
+						fi.DataRaw = string(contents)
+					}
+				}
+				file.Close()
+			}
+		}
+
+		if options.ParseMedia && fi.Size > 0 {
+			file, err := os.Open(path)
+			if err != nil {
+				log.Warnf("Warning: Could not open media file %s for parsing media info: %v\n", path, err)
+			} else {
 				mediaInfo, err := mediainfo.ParseMediaInfo(file, "")
 				if err == nil {
 					fi.MediaWidth = mediaInfo.Width
@@ -444,18 +510,19 @@ func doIndex(dir string, allowedExts []string, noHash bool,
 					fi.MediaDuration = mediaInfo.Duration
 					fi.MediaSignature = mediaInfo.Signature
 					fi.MediaCtime = mediaInfo.Ctime
-					if !mediaInfo.Ctime.Equal(time.Time{}) {
-						fi.MediaCdate = mediaInfo.Ctime.UTC().Format(constants.DATE_FORMAT)
-					}
+					fi.MediaCdate = mediaInfo.Ctime.UTC().Format(constants.DATE_FORMAT)
 				} else {
 					log.Warnf("Warning: Could not open file %s for media info parsing: %v\n", path, err)
 				}
-			} else {
-				log.Warnf("Warning: Could not open media file %s for parsing media info: %v\n", path, err)
+				file.Close()
 			}
 		}
 
 		filelist = append(filelist, fi)
+
+		if info.IsDir() && (options.NoRecursive || options.MaxDepth >= 0 && depth >= options.MaxDepth) {
+			return filepath.SkipDir
+		}
 		return nil
 	})
 

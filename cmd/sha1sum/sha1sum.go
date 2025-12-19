@@ -1,4 +1,4 @@
-package sha256sum
+package sha1sum
 
 import (
 	"fmt"
@@ -13,15 +13,15 @@ import (
 	"github.com/sagan/goaider/util/helper"
 )
 
-var sha256sumCmd = &cobra.Command{
-	Use:   "sha256sum [file]...",
-	Short: "Calculate sha256 hash of files",
-	Long: `Calculate sha256 hash of files.
+var sha1sumCmd = &cobra.Command{
+	Use:   "sha1sum [file]...",
+	Short: "Calculate sha1 hash of files",
+	Long: `Calculate sha1 hash of files.
 	
 If no [file] is provided, or when {file} is -, read stdin.
 
-It outputs in same format as Linux's "sha256sum" util.`,
-	RunE: doSha256sum,
+It outputs in same format as Linux's "sha1sum" util.`,
+	RunE: doSha1sum,
 }
 
 var (
@@ -29,7 +29,7 @@ var (
 	flagOutput string
 )
 
-func doSha256sum(cmd *cobra.Command, args []string) (err error) {
+func doSha1sum(cmd *cobra.Command, args []string) (err error) {
 	if flagOutput != "-" {
 		if exists, err := util.FileExists(flagOutput); err != nil || (exists && !flagForce) {
 			return fmt.Errorf("output file %q exists or can't access, err=%w", flagOutput, err)
@@ -40,18 +40,17 @@ func doSha256sum(cmd *cobra.Command, args []string) (err error) {
 
 	if len(args) == 0 || (len(args) == 1 && args[0] == "-") {
 		// Read from stdin
-		hash, err := util.Hash(cmd.InOrStdin(), constants.HASH_SHA256, true)
+		hash, err := util.Hash(cmd.InOrStdin(), constants.HASH_SHA1, true)
 		if err != nil {
-			return fmt.Errorf("failed to calculate SHA256 for stdin: %w", err)
+			return fmt.Errorf("failed to calculate SHA1 for stdin: %w", err)
 		}
 		outputBuilder.WriteString(fmt.Sprintf("%s  -\n", hash))
 	} else {
 		filenames := helper.ParseFilenameArgs(args...)
 		for _, filename := range filenames {
-			hash, err := util.HashFile(filename, constants.HASH_SHA256, true)
+			hash, err := util.HashFile(filename, constants.HASH_SHA1, true)
 			if err != nil {
-				// Print error and continue for other files, similar to standard sha256sum
-				fmt.Fprintf(cmd.ErrOrStderr(), "sha256sum: %s: %v\n", filename, err)
+				fmt.Fprintf(cmd.ErrOrStderr(), "sha1sum: %s: %v\n", filename, err)
 				continue
 			}
 			outputBuilder.WriteString(fmt.Sprintf("%s  %s\n", hash, filename))
@@ -73,7 +72,7 @@ func doSha256sum(cmd *cobra.Command, args []string) (err error) {
 }
 
 func init() {
-	sha256sumCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Force overwriting without confirmation")
-	sha256sumCmd.Flags().StringVarP(&flagOutput, "output", "o", "-", `Output file path. Use "-" for stdout`)
-	cmd.RootCmd.AddCommand(sha256sumCmd)
+	sha1sumCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Force overwriting without confirmation")
+	sha1sumCmd.Flags().StringVarP(&flagOutput, "output", "o", "-", `Output file path. Use "-" for stdout`)
+	cmd.RootCmd.AddCommand(sha1sumCmd)
 }

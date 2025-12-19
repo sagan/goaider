@@ -41,7 +41,7 @@ func init() {
 		"Password(s) to try for encrypted archives. Can be set multiple values")
 	extractallCmd.Flags().StringVarP(&flagSevenzipBinary, "sevenzip-binary", "", "",
 		`7z.exe / 7z binary file name or path. If 7z binary exists in PATH, use that automatically, unless it's set to "`+
-			constants.NONE+`"`)
+			constants.NULL+`"`)
 	extractallCmd.Flags().BoolVarP(&flagCreateArchiveNameFolder, "create-archive-name-folder", "", false,
 		"Always create folder for each archive, use archive file base name (foo.rar => foo) as folder name")
 	extractallCmd.Flags().StringVarP(&flagZipFilenameEncoding, "zip-filename-encoding", "", "",
@@ -51,7 +51,7 @@ func init() {
 
 func extractall(cmd *cobra.Command, args []string) (err error) {
 	sevenzipBinary := ""
-	if flagSevenzipBinary != "" && flagSevenzipBinary != constants.NONE {
+	if flagSevenzipBinary != "" && flagSevenzipBinary != constants.NULL {
 		if sevenzipBinaryPath, err := exec.LookPath("7z"); err == nil && sevenzipBinaryPath != "" {
 			sevenzipBinary = sevenzipBinaryPath
 		}

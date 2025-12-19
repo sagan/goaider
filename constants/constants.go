@@ -17,7 +17,13 @@ const (
 
 	DATE_FORMAT = "2006-01-02"
 
-	NONE = "none"
+	MIME_DIR = "application/x-directory"
+
+	HASH_MD5    = "md5"
+	HASH_SHA1   = "sha1"
+	HASH_SHA256 = "sha256"
+
+	NULL = "null"
 )
 
 const HELP_MODEL = `LLM model. It supports Gemini, OpenAI, OpenRouter, or any OpenAI API compatible model. ` +
@@ -40,5 +46,5 @@ const HELP_TEMPLATE_FLAG = `The Go text template string. If the value starts wit
 	`which contents will be used as template. ` +
 	`All sprout functions are supported, see https://github.com/go-sprout/sprout`
 
-const HELP_TEMPERATURE_FLAG = `The temperature to use for the model. Range 0.0-2.0. ` +
+const HELP_TEMPERATURE_FLAG = `The temperature to use for the model. Range 0.0-2.0 (some model capped at max 1.0). ` +
 	`Lower is deterministic; Higher is creative`

@@ -6,6 +6,8 @@ import (
 	"io"
 	"reflect"
 	"sort"
+
+	"github.com/sagan/goaider/constants"
 )
 
 // DiffResult holds the structured diff.
@@ -39,7 +41,7 @@ func (d *DiffResult) Empty() bool {
 // be the underlying diff map/tree.
 func (d *DiffResult) MarshalJSON() ([]byte, error) {
 	if d == nil || d.data == nil {
-		return []byte("null"), nil
+		return []byte(constants.NULL), nil
 	}
 	return json.Marshal(d.data)
 }

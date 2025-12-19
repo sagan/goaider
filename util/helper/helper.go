@@ -6,10 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"text/template"
@@ -19,6 +21,7 @@ import (
 	"github.com/dop251/goja_nodejs/require"
 	"github.com/go-sprout/sprout"
 	"github.com/go-sprout/sprout/group/all"
+	"github.com/gobwas/glob"
 	"github.com/google/shlex"
 	"github.com/natefinch/atomic"
 	log "github.com/sirupsen/logrus"
@@ -54,68 +57,154 @@ func system(cmdline any) int {
 	return 0
 }
 
+// Recognize "*.txt" style glob, return parsed filenames.
 func ParseFilenameArgs(args ...string) []string {
 	names := []string{}
 	for _, arg := range args {
-		filenames := GetWildcardFilenames(arg)
+		filenames := ParseGlobFilenames(arg)
 		if filenames == nil {
 			names = append(names, arg)
 		} else {
 			names = append(names, filenames...)
 		}
 	}
+	names = util.UniqueSlice(names)
 	return names
 }
 
-// "*.torrent" => ["./a.torrent", "./b.torrent"...].
-// Return nil if filestr does not contains wildcard char.
-// Windows cmd / powershell 均不支持命令行 *.txt glob。必须应用自己实现。做个简易版的.
-func GetWildcardFilenames(filestr string) []string {
-	if !strings.ContainsAny(filestr, "*") {
+// ParseGlobFilenames expands a shell-like glob pattern (e.g. "*.txt") into
+// matching filenames on disk.
+//
+// Notes / behavior:
+//   - Returns matches sorted lexicographically.
+//   - If there are no matches (or pattern is invalid), returns an empty slice.
+//   - For relative patterns, results are relative to the current working dir.
+//   - This does NOT implement full bash features (brace expansion, extglob, etc.).
+func ParseGlobFilenames(pattern string) []string {
+	pattern = strings.TrimSpace(pattern)
+	if pattern == "" {
 		return nil
 	}
-	dir := filepath.Dir(filestr)
-	name := filepath.Base(filestr)
-	ext := filepath.Ext(name)
-	if ext != "" {
-		name = name[:len(name)-len(ext)]
+
+	// Expand "~/" (common shell convenience).
+	if strings.HasPrefix(pattern, "~/") || pattern == "~" {
+		if home, err := os.UserHomeDir(); err == nil {
+			if pattern == "~" {
+				pattern = home
+			} else {
+				pattern = filepath.Join(home, pattern[2:])
+			}
+		}
 	}
-	prefix := ""
-	suffix := ""
-	exact := ""
-	index := strings.Index(name, "*")
-	if index != -1 {
-		prefix = name[:index]
-		suffix = name[index+1:]
-	} else {
-		exact = name
-	}
-	entries, err := os.ReadDir(dir)
+
+	// Normalize to slash for matching; use '/' as separator for gobwas/glob.
+	patSlash := filepath.ToSlash(pattern)
+
+	g, err := glob.Compile(patSlash, '/')
 	if err != nil {
 		return nil
 	}
-	filenames := []string{}
-	for _, entry := range entries {
-		entryName := entry.Name()
-		entryExt := filepath.Ext(entryName)
-		if ext != "" {
-			if entryExt == "" || (entryExt != ext && ext != ".*") {
-				continue
+
+	// Choose a walk root: directory portion of the longest non-meta prefix.
+	walkRoot := computeWalkRoot(pattern)
+
+	// We'll match either absolute or relative paths depending on how pattern is written.
+	isAbs := filepath.IsAbs(pattern)
+
+	var matches []string
+
+	_ = filepath.WalkDir(walkRoot, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			// Ignore unreadable dirs/files.
+			return nil
+		}
+		// Usually globs expand to both files and directories. Keep both.
+		// If you only want files, uncomment:
+		// if d.IsDir() { return nil }
+
+		var target string
+		if isAbs {
+			abs, err := filepath.Abs(path)
+			if err != nil {
+				return nil
 			}
-			entryName = entryName[:len(entryName)-len(entryExt)]
+			target = filepath.ToSlash(abs)
+		} else {
+			rel, err := filepath.Rel(".", path)
+			if err != nil {
+				return nil
+			}
+			target = filepath.ToSlash(rel)
 		}
-		if exact != "" && entryName != exact {
-			continue
+
+		// Approximate dotfile behavior: don't match names starting with '.'
+		// unless the corresponding pattern segment starts with '.'.
+		if !dotfileOK(patSlash, target) {
+			return nil
 		}
-		if prefix != "" && !strings.HasPrefix(entryName, prefix) {
-			continue
+
+		if g.Match(target) {
+			// Return in the same "style" as input: abs stays abs; rel stays rel.
+			if isAbs {
+				matches = append(matches, filepath.Clean(target))
+			} else {
+				matches = append(matches, filepath.Clean(filepath.FromSlash(target)))
+			}
 		}
-		if suffix != "" && !strings.HasSuffix(entryName, suffix) {
-			continue
+		return nil
+	})
+
+	sort.Strings(matches)
+	return matches
+}
+
+func computeWalkRoot(pattern string) string {
+	// Find the longest prefix before any glob metachar.
+	// Metachars: *, ?, [, ] (we treat '{' too, though we don't implement brace expansion).
+	const metas = "*?[{"
+
+	p := pattern
+	prefix := p
+	for i := 0; i < len(p); i++ {
+		if strings.ContainsRune(metas, rune(p[i])) {
+			prefix = p[:i]
+			break
 		}
-		filenames = append(filenames, dir+string(filepath.Separator)+entry.Name())
 	}
-	return filenames
+
+	// Root should be a directory: chop to last separator in the non-meta prefix.
+	prefixDir := prefix
+	lastSep := strings.LastIndexAny(prefixDir, `/\`)
+	if lastSep >= 0 {
+		prefixDir = prefixDir[:lastSep+1]
+	}
+
+	if prefixDir == "" {
+		return "."
+	}
+	return filepath.Clean(prefixDir)
+}
+
+func dotfileOK(patternSlash, targetSlash string) bool {
+	// Very small approximation of shell rule:
+	// if a path segment begins with '.' then pattern segment should also begin with '.'
+	// to match it.
+	pSeg := strings.Split(patternSlash, "/")
+	tSeg := strings.Split(targetSlash, "/")
+
+	// Align from the end if lengths differ (walkRoot may change the relative prefix),
+	// but generally both should align. We'll do a best-effort alignment.
+	// If we can't align, fall back to allowing the match check.
+	if len(pSeg) != len(tSeg) {
+		return true
+	}
+
+	for i := range tSeg {
+		if strings.HasPrefix(tSeg[i], ".") && !strings.HasPrefix(pSeg[i], ".") {
+			return false
+		}
+	}
+	return true
 }
 
 // Ask user to confirm an (dangerous) action via typing yes in tty

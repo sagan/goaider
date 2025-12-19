@@ -174,24 +174,24 @@ func Init() {
 //
 //	*MediaFileInfo: A pointer to a struct containing the extracted media information.
 //	error: An error if parsing fails or the media type is unsupported.
-func ParseMediaInfo(input io.Reader, mimeType string) (info *MediaFileInfo, err error) {
-	if mimeType == "" {
-		input, mimeType, err = util.DetectContentType(input)
+func ParseMediaInfo(input io.Reader, contentType string) (info *MediaFileInfo, err error) {
+	if contentType == "" {
+		input, contentType, err = util.DetectContentType(input)
 		if err != nil {
 			return nil, err
 		}
 	}
 	switch {
-	case strings.HasPrefix(mimeType, "image/"):
+	case strings.HasPrefix(contentType, "image/"):
 		// https://github.com/golang/go/issues/43382
-		if mimeType == "image/png" {
+		if contentType == "image/png" {
 			input = &PNGAncillaryChunkStripper{Reader: input}
 		}
 		return ParseImageFileMediaInfo(input)
-	case strings.HasPrefix(mimeType, "video/"), strings.HasPrefix(mimeType, "audio/"):
+	case strings.HasPrefix(contentType, "video/"), strings.HasPrefix(contentType, "audio/"):
 		return ParseVideoAudioMediaInfo(input)
 	}
-	return nil, fmt.Errorf("unknown media type %s", mimeType)
+	return nil, fmt.Errorf("unknown media type %s", contentType)
 }
 
 func ParseVideoAudioMediaInfo(input io.Reader) (info *MediaFileInfo, err error) {
