@@ -20,6 +20,7 @@ import (
 	"github.com/sagan/goaider/cmd"
 	"github.com/sagan/goaider/constants"
 	"github.com/sagan/goaider/features/clipboard"
+	"github.com/sagan/goaider/features/speaker"
 	"github.com/sagan/goaider/features/translation"
 	"github.com/sagan/goaider/util"
 	"github.com/sagan/goaider/util/helper"
@@ -54,6 +55,9 @@ var (
 	flagOutputPrefix   string // prefix string when generating output text
 	flagOutputTemplate string // template string for generating output text
 	flagAutoCopy       bool   // auto copy translated text to clipboard
+	flagAutoCopyOnly   bool
+	flagPlay           bool
+	flagPlaySource     bool
 	flagInput          string // input file
 	flagTargetLang     string // Target lang. Any of: "ja", "fr", "ru", "es", "de", "en", "zh", "zh-cn", "zh-tw", "chs", "cht"
 	flagSourceLang     string // source lang
@@ -64,8 +68,14 @@ func init() {
 	translateCmd.Flags().BoolVarP(&flagLines, "lines", "L", false,
 		`Translate each line of source text as a separate input. Output will also be line by line`)
 	translateCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Force overwriting without confirmation")
-	translateCmd.Flags().BoolVarP(&flagAutoCopy, "auto-copy", "C", false, `Auto copy translated text to clipboard. `+
+	translateCmd.Flags().BoolVarP(&flagAutoCopy, "auto-copy", "c", false, `Auto copy translated text to clipboard. `+
 		`It works on Windows only`)
+	translateCmd.Flags().BoolVarP(&flagAutoCopyOnly, "auto-copy-only", "C", false,
+		`Mute output and only copy translated text to clipboard. It works on Windows only`)
+	translateCmd.Flags().BoolVarP(&flagPlay, "play", "p", false,
+		`Play translated text as speech. It works on Windows only`)
+	translateCmd.Flags().BoolVarP(&flagPlaySource, "play-source", "P", false,
+		`Play source text as speech. It works on Windows only`)
 	translateCmd.Flags().StringVarP(&flagTargetLang, "target", "t", "en",
 		`Target language. Any of: `+
 			`"en", "ja", "fr", "de", "es", "pt", "kr", "ru", "ar", "zh-tw", "zh", "zh-cn", "cht", "chs"`)
@@ -74,7 +84,7 @@ func init() {
 			`"en", "ja", "fr", "de", "es", "pt", "kr", "ru", "ar", "zh-tw", "zh", "zh-cn", "cht", "chs"`)
 	translateCmd.Flags().StringVarP(&flagInput, "input", "i", "", `Read text from input file. Use "-" for stdin`)
 	translateCmd.Flags().StringVarP(&flagOutput, "output", "o", "-", `Output file path. Use "-" for stdout`)
-	translateCmd.Flags().StringVarP(&flagOutputPrefix, "output-prefix", "P", "",
+	translateCmd.Flags().StringVarP(&flagOutputPrefix, "output-prefix", "", "",
 		`Prepend this prefix to translated text to generate response text`)
 	translateCmd.Flags().StringVarP(&flagOutputTemplate, "output-template", "T", "",
 		`Template to generate response text. `+
@@ -89,6 +99,12 @@ func shellCompleter(d prompt.Document) []prompt.Suggest {
 }
 
 func doTranslate(cmd *cobra.Command, args []string) (err error) {
+	if flagAutoCopyOnly {
+		flagAutoCopy = true
+	}
+	if flagAutoCopy {
+		clipboard.Init()
+	}
 	var targetLang, sourceLang language.Tag
 	if tag, ok := translation.LanguageTags[flagTargetLang]; !ok {
 		return fmt.Errorf("unsupported target lang %s", flagTargetLang)
@@ -154,6 +170,16 @@ func doTranslate(cmd *cobra.Command, args []string) (err error) {
 			if flagAutoCopy {
 				clipboard.CopyString(response)
 			}
+			if flagPlaySource || flagPlay {
+				go func(sourceLang, source, lang, text string) {
+					if flagPlaySource {
+						speaker.Play(sourceLang, source)
+					}
+					if flagPlay {
+						speaker.Play(lang, text)
+					}
+				}(detectedSource, input, flagTargetLang, translatedText)
+			}
 			fmt.Printf("%s\n", response)
 		}, shellCompleter, prompt.OptionLivePrefix(func() (prefix string, useLivePrefix bool) {
 			return fmt.Sprintf("(%s) > ", flagTargetLang), true
@@ -205,18 +231,28 @@ func doTranslate(cmd *cobra.Command, args []string) (err error) {
 			finalOutput.WriteString(response)
 			finalOutput.WriteString("\n")
 		}
-
 		if flagAutoCopy {
 			clipboard.CopyString(finalOutput.String())
 		}
-
-		if flagOutput == "-" {
-			_, err = fmt.Print(finalOutput.String())
-		} else {
-			err = atomic.WriteFile(flagOutput, strings.NewReader(finalOutput.String()))
+		if flagPlay || flagPlaySource {
+			for i := range lines {
+				if flagPlaySource {
+					speaker.Play(detectedSources[i], lines[i])
+				}
+				if flagPlay {
+					speaker.Play(flagTargetLang, translatedLines[i])
+				}
+			}
 		}
-		if err != nil {
-			return err
+		if !flagAutoCopyOnly {
+			if flagOutput == "-" {
+				_, err = fmt.Print(finalOutput.String())
+			} else {
+				err = atomic.WriteFile(flagOutput, strings.NewReader(finalOutput.String()))
+			}
+			if err != nil {
+				return err
+			}
 		}
 		return nil
 	}
@@ -239,13 +275,21 @@ func doTranslate(cmd *cobra.Command, args []string) (err error) {
 	if flagAutoCopy {
 		clipboard.CopyString(response)
 	}
-	if flagOutput == "-" {
-		_, err = fmt.Print(response)
-	} else {
-		err = atomic.WriteFile(flagOutput, strings.NewReader(translatedText))
+	if flagPlaySource {
+		speaker.Play(detectedSource, inputText)
 	}
-	if err != nil {
-		return err
+	if flagPlay {
+		speaker.Play(flagTargetLang, translatedText)
+	}
+	if !flagAutoCopyOnly {
+		if flagOutput == "-" {
+			_, err = fmt.Print(response)
+		} else {
+			err = atomic.WriteFile(flagOutput, strings.NewReader(translatedText))
+		}
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

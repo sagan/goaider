@@ -50,6 +50,7 @@ var (
 	flagOutputPrompt    bool // output generated full text prompt only
 	flagForce           bool
 	flagAutoCopy        bool // auto copy LLM response text to clipboard
+	flagAutoCopyOnly    bool
 	flagTemperature     float64
 	flagOutput          string // output file, "-" for stdout (default)
 	flagModel           string
@@ -64,11 +65,12 @@ func init() {
 	chatCmd.Flags().BoolVarP(&flagOutputPrompt, "output-prompt", "P", false,
 		"Don't talk to LLM. Instead, output generated full text prompt only")
 	chatCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Force overwriting without confirmation")
-	chatCmd.Flags().BoolVarP(&flagAutoCopy, "auto-copy", "C", false, `Auto copy LLM response text to clipboard. `+
+	chatCmd.Flags().BoolVarP(&flagAutoCopy, "auto-copy", "c", false, `Auto copy LLM response text to clipboard. `+
 		`If --output-prompt is set, copy prompt instead. It works on Windows only`)
+	chatCmd.Flags().BoolVarP(&flagAutoCopyOnly, "auto-copy-only", "C", false,
+		`Mute output and only copy LLM response text to clipboard. It works on Windows only`)
 	chatCmd.Flags().Float64VarP(&flagTemperature, "temperature", "T", 1.0, constants.HELP_TEMPERATURE_FLAG)
-	chatCmd.Flags().StringVarP(&flagOutput, "output", "o", "-", `Output file path. Use "-" for stdout. `+
-		`Set to "`+constants.NULL+`" to mute, which is useful with --auto-copy flag`)
+	chatCmd.Flags().StringVarP(&flagOutput, "output", "o", "-", `Output file path. Use "-" for stdout`)
 	chatCmd.Flags().StringVarP(&flagModel, "model", "", "", "The model to use. "+constants.HELP_MODEL)
 	chatCmd.Flags().StringVarP(&flagModelKey, "model-key", "", "", constants.HELP_MODEL_KEY)
 	chatCmd.Flags().StringVarP(&flagSchema, "schema", "", "",
@@ -85,6 +87,12 @@ func shellCompleter(d prompt.Document) []prompt.Suggest {
 }
 
 func doChat(cmd *cobra.Command, args []string) (err error) {
+	if flagAutoCopyOnly {
+		flagAutoCopy = true
+	}
+	if flagAutoCopy {
+		clipboard.Init()
+	}
 	if flagModel == "" {
 		flagModel = config.GetDefaultModel()
 	}
@@ -208,16 +216,19 @@ func doChat(cmd *cobra.Command, args []string) (err error) {
 		if err != nil {
 			return err
 		}
-		if flagOutput == "-" {
-			_, err = io.Copy(cmd.OutOrStdout(), strings.NewReader(fullPrompt))
-		} else if flagOutput != constants.NULL {
-			err = atomic.WriteFile(flagOutput, strings.NewReader(fullPrompt))
-		}
+		log.Printf("Generated prompt: %d bytes UTF-8 string", len(fullPrompt))
 		if flagAutoCopy {
 			clipboard.CopyString(fullPrompt)
 		}
-		log.Printf("Generated prompt: %d bytes UTF-8 string", len(fullPrompt))
-		return err
+		if !flagAutoCopyOnly {
+			if flagOutput == "-" {
+				_, err = io.Copy(cmd.OutOrStdout(), strings.NewReader(fullPrompt))
+			} else if flagOutput != constants.NULL {
+				err = atomic.WriteFile(flagOutput, strings.NewReader(fullPrompt))
+			}
+			return err
+		}
+		return nil
 	}
 
 	var schemaValidator *jsonschemaValidator.Schema
@@ -245,10 +256,9 @@ func doChat(cmd *cobra.Command, args []string) (err error) {
 		}
 	}
 
-	response := strings.Builder{}
-	responseStr := ""
 	reader, writer := io.Pipe()
 	go func() {
+		response := strings.Builder{}
 		err := llm.Stream(flagModelKey, flagModel, openaiReq, func(content string) error {
 			response.WriteString(content)
 			writer.Write([]byte(content))
@@ -258,25 +268,29 @@ func doChat(cmd *cobra.Command, args []string) (err error) {
 			writer.CloseWithError(err)
 			return
 		}
-		responseStr = response.String()
+		responseStr := response.String()
 		if schemaValidator != nil {
 			if err := schemaValidator.Validate([]byte(responseStr)); err != nil {
 				writer.CloseWithError(fmt.Errorf("LLM response does not conform to schema: %w", err))
 				return
 			}
 		}
+		if flagAutoCopy {
+			clipboard.CopyString(responseStr)
+		}
 		writer.Close()
 	}()
-	if flagOutput == "-" {
-		_, err = io.Copy(cmd.OutOrStdout(), reader)
-	} else if flagOutput != constants.NULL {
-		err = atomic.WriteFile(flagOutput, reader)
-	}
-	if err != nil {
-		return err
-	}
-	if flagAutoCopy {
-		clipboard.CopyString(responseStr)
+	if !flagAutoCopyOnly {
+		if flagOutput == "-" {
+			_, err = io.Copy(cmd.OutOrStdout(), reader)
+		} else if flagOutput != constants.NULL {
+			err = atomic.WriteFile(flagOutput, reader)
+		}
+		if err != nil {
+			return err
+		}
+	} else {
+		_, _ = io.Copy(io.Discard, reader)
 	}
 	return nil
 }

@@ -19,7 +19,8 @@
 - `goaider base64encode` / `goaider base64decode` : base64 编码 / 解码。
 - `goaider rand` / `goaider randb` / `goaider randu`: 生成一个密码学安全的随机字符串 / 随机二进制 bytes / 随机 uuid。
 - `goaider stt` (speech to text) : 使用 LLM 生成目录里所有音频文件的文本转写(transcript)。适用于 TTS 模型训练准备数据集。
-- `goaider translate` : 使用 Google Cloud Translation API 翻译文本。支持翻译文件；支持 interactive shell 模式(输入原文；输出译文)；支持自动将译文复制到剪贴板(仅限 Windows)。设计用途是将中文 prompt 翻译为英文然后调用图片生成模型。。
+- `goaider translate` : 使用 Google Cloud Translation API 翻译文本。支持翻译文件；支持 interactive shell 模式(输入原文；输出译文)；支持自动将译文复制到剪贴板(仅限 Windows)。设计用途是将中文 prompt 翻译为英文然后调用图片生成模型。
+- `goaider tts` : 将文本转换为语音 (Text to speech) 并播放。仅支持 Windows。
 - `goaider comfyui` : ComfyUI 相关的功能。
   - `goaider comfyui run <workflow.json>` : 直接运行 json / png 格式的 workflow 并保存输出文件。
   - `goaider comfyui batchgen` : 批量运行 AIGC 图像生成任务。通过 csv 文件读取输入作为 prompt。

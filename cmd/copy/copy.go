@@ -1,6 +1,7 @@
 package copy
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -14,10 +15,16 @@ import (
 
 // copyCmd represents the copy command
 var copyCmd = &cobra.Command{
-	Use:   "copy",
+	Use:   "copy [text]",
 	Short: "Copy stdin to clipboard. Windows only",
-	Long:  `Copy stdin to clipboard. Windows only.`,
-	RunE:  doCopy,
+	Long: `Copy stdin to clipboard. Windows only.
+
+If [text] is provided, copy it.
+If "--input" flag is set, copy this file.
+If neither is set, copy stdin.
+`,
+	RunE: doCopy,
+	Args: cobra.MaximumNArgs(1),
 }
 
 var (
@@ -29,8 +36,7 @@ func init() {
 	cmd.RootCmd.AddCommand(copyCmd)
 	copyCmd.Flags().BoolVarP(&flagImage, "image", "I", false, `Optional: write to clipboard as image. `+
 		`Non-png image will be converted to png first`)
-	copyCmd.Flags().StringVarP(&flagInput, "input", "i", "", `Optional: copy file to clipboard instead of stdin. `+
-		`If set, stdin is ignored`)
+	copyCmd.Flags().StringVarP(&flagInput, "input", "i", "", `Optional: copy file to clipboard instead of stdin`)
 }
 
 func doCopy(cmd *cobra.Command, args []string) error {
@@ -39,7 +45,12 @@ func doCopy(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	var input io.Reader
-	if flagInput == "" || flagInput == "-" {
+	if flagInput != "" && len(args) > 0 {
+		return fmt.Errorf("--input flag and {text} arg are not compatible")
+	}
+	if len(args) > 0 {
+		input = strings.NewReader(args[0])
+	} else if flagInput == "" || flagInput == "-" {
 		input = cmd.InOrStdin()
 	} else {
 		f, err := os.Open(flagInput)
