@@ -77,11 +77,9 @@ func init() {
 	translateCmd.Flags().BoolVarP(&flagPlaySource, "play-source", "P", false,
 		`Play source text as speech. It works on Windows only`)
 	translateCmd.Flags().StringVarP(&flagTargetLang, "target", "t", "en",
-		`Target language. Any of: `+
-			`"en", "ja", "fr", "de", "es", "pt", "kr", "ru", "ar", "zh-tw", "zh", "zh-cn", "cht", "chs"`)
+		`Target language. Any of: `+constants.HELP_LANGS)
 	translateCmd.Flags().StringVarP(&flagSourceLang, "source", "s", "auto",
-		`Source language. Any of: "auto", `+
-			`"en", "ja", "fr", "de", "es", "pt", "kr", "ru", "ar", "zh-tw", "zh", "zh-cn", "cht", "chs"`)
+		`Source language. Any of: "auto", `+constants.HELP_LANGS)
 	translateCmd.Flags().StringVarP(&flagInput, "input", "i", "", `Read text from input file. Use "-" for stdin`)
 	translateCmd.Flags().StringVarP(&flagOutput, "output", "o", "-", `Output file path. Use "-" for stdout`)
 	translateCmd.Flags().StringVarP(&flagOutputPrefix, "output-prefix", "", "",
@@ -234,16 +232,6 @@ func doTranslate(cmd *cobra.Command, args []string) (err error) {
 		if flagAutoCopy {
 			clipboard.CopyString(finalOutput.String())
 		}
-		if flagPlay || flagPlaySource {
-			for i := range lines {
-				if flagPlaySource {
-					speaker.Play(detectedSources[i], lines[i])
-				}
-				if flagPlay {
-					speaker.Play(flagTargetLang, translatedLines[i])
-				}
-			}
-		}
 		if !flagAutoCopyOnly {
 			if flagOutput == "-" {
 				_, err = fmt.Print(finalOutput.String())
@@ -252,6 +240,16 @@ func doTranslate(cmd *cobra.Command, args []string) (err error) {
 			}
 			if err != nil {
 				return err
+			}
+		}
+		if flagPlay || flagPlaySource {
+			for i := range lines {
+				if flagPlaySource {
+					speaker.Play(detectedSources[i], lines[i])
+				}
+				if flagPlay {
+					speaker.Play(flagTargetLang, translatedLines[i])
+				}
 			}
 		}
 		return nil
@@ -275,12 +273,6 @@ func doTranslate(cmd *cobra.Command, args []string) (err error) {
 	if flagAutoCopy {
 		clipboard.CopyString(response)
 	}
-	if flagPlaySource {
-		speaker.Play(detectedSource, inputText)
-	}
-	if flagPlay {
-		speaker.Play(flagTargetLang, translatedText)
-	}
 	if !flagAutoCopyOnly {
 		if flagOutput == "-" {
 			_, err = fmt.Print(response)
@@ -290,6 +282,12 @@ func doTranslate(cmd *cobra.Command, args []string) (err error) {
 		if err != nil {
 			return err
 		}
+	}
+	if flagPlaySource {
+		speaker.Play(detectedSource, inputText)
+	}
+	if flagPlay {
+		speaker.Play(flagTargetLang, translatedText)
 	}
 
 	return nil

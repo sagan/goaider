@@ -48,3 +48,6 @@ const HELP_TEMPLATE_FLAG = `The Go text template string. If the value starts wit
 
 const HELP_TEMPERATURE_FLAG = `The temperature to use for the model. Range 0.0-2.0 (some model capped at max 1.0). ` +
 	`Lower is deterministic; Higher is creative`
+
+// Normal languages that people actually use. No political correct or DEI ones.
+const HELP_LANGS = `"en", "ja", "fr", "de", "es", "pt", "kr", "ru", "ar", "zh-tw", "zh", "zh-cn", "cht", "chs"`

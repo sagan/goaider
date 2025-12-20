@@ -11,6 +11,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/sagan/goaider/cmd"
+	"github.com/sagan/goaider/constants"
 	"github.com/sagan/goaider/features/speaker"
 	"github.com/sagan/goaider/features/translation"
 	"github.com/sagan/goaider/util"
@@ -18,9 +19,13 @@ import (
 )
 
 var ttsCmd = &cobra.Command{
-	Use:   "tts [text]",
-	Short: "Convert text to speech and play audio. Windows only",
+	Use:     "tts [text]",
+	Aliases: []string{"say", "speak"},
+	Short:   "Convert text to speech and play audio. Windows only",
 	Long: `Convert text to speech and play audio. Windows only.
+
+It uses Google Translate public TTS api, e.g. :
+  http://translate.google.com/translate_tts?ie=UTF-8&q=bonjour&client=t&tl=fr .
 
 It caches generated audio files in CACHE_DIR/` + speaker.CACHE_FOLDER_NAME + ` . Where CACHE_DIR is:
 - Linux: $XDG_CACHE_HOME or $HOME/.cache .
@@ -45,7 +50,7 @@ func init() {
 	cmd.RootCmd.AddCommand(ttsCmd)
 	ttsCmd.Flags().BoolVarP(&flagClean, "clean", "c", false, "Clean up all cached audio files and exit")
 	ttsCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Force overwriting existing file")
-	ttsCmd.Flags().StringVarP(&flagLang, "lang", "l", "en", `Language to use for TTS. E.g. "en", "ja", "fr", "de", "zh"`)
+	ttsCmd.Flags().StringVarP(&flagLang, "lang", "l", "en", `Language to use for TTS. Any of: `+constants.HELP_LANGS)
 	ttsCmd.Flags().StringVarP(&flagInput, "input", "i", "", `Optional: read text from file instead. Use "-" for stdin`)
 	ttsCmd.Flags().StringVarP(&flagOutput, "output", "o", "", `Optional: save generated speech audio (mp3) to file`)
 }

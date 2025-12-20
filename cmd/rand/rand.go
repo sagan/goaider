@@ -15,7 +15,7 @@ var randCmd = &cobra.Command{
 	Use:     "rand",
 	Aliases: []string{"random"},
 	Short:   "Get a cryptographically secure random string of [a-zA-Z0-9]{22}",
-	Long: `Get a cryptographically secure random string of [a-zA-Z0-9]{2}.
+	Long: `Get a cryptographically secure random string of [a-zA-Z0-9]{22}.
 
 It outputs to stdout.`,
 	RunE: doRand,
