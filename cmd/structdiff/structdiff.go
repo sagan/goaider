@@ -75,10 +75,6 @@ func doDiff(cmd *cobra.Command, args []string) (err error) {
 	} else if rightMime == "" && lefeMime != "" {
 		rightMime = lefeMime
 	}
-	if lefeMime == "" || rightMime == "" {
-		// don't use http.DetectContentType as it always return text/plain for any textual file.
-		return fmt.Errorf("files types unknown: left=%s, right=%s", lefeMime, rightMime)
-	}
 	leftInput = stringutil.GetTextReader(leftInput)
 	rightInput = stringutil.GetTextReader(rightInput)
 

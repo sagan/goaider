@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -556,4 +557,30 @@ func GetTemplate(tpl string, strict bool) (*Template, error) {
 		return nil, err
 	}
 	return &Template{Template: t, jsvm: jsvm}, nil
+}
+
+// Run a cmdline.
+// If shell is true, execute it using system shell (cmd / sh); otherwise parse it using shlex.
+func RunCmdline(cmdline string, shell bool, stdin io.Reader, stdout, stderr io.Writer) (err error) {
+	var command *exec.Cmd
+	if shell {
+		if runtime.GOOS == "windows" {
+			command = exec.Command("cmd", "/C", cmdline)
+		} else {
+			command = exec.Command("sh", "-c", cmdline)
+		}
+	} else {
+		args, err := shlex.Split(cmdline)
+		if err != nil {
+			return err
+		}
+		if len(args) == 0 {
+			return fmt.Errorf("cmdline is empty")
+		}
+		command = exec.Command(args[0], args[1:]...)
+	}
+	command.Stdin = stdin
+	command.Stdout = stdout
+	command.Stderr = stderr
+	return command.Run()
 }

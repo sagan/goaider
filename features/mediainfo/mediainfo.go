@@ -12,6 +12,7 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -19,12 +20,13 @@ import (
 
 	exif "github.com/dsoprea/go-exif/v3"
 	exifcommon "github.com/dsoprea/go-exif/v3/common"
-	"github.com/sagan/goaider/util"
-
 	log "github.com/sirupsen/logrus"
 	_ "golang.org/x/image/bmp"
 	_ "golang.org/x/image/tiff"
 	_ "golang.org/x/image/webp"
+
+	"github.com/sagan/goaider/constants"
+	"github.com/sagan/goaider/util"
 )
 
 type MediaFileInfo struct {
@@ -143,18 +145,25 @@ type SideData struct {
 
 var (
 	initializeOnce sync.Once
-	ffprobeExists  bool
+	Ffprobe        string // ffprobe binary path
 )
 
-// Init function. Safe to call multiples.
+// Init function. Safe to call multiple times.
 func Init() {
 	initializeOnce.Do(func() {
-		_, err := exec.LookPath("ffprobe")
-		if err == nil {
-			ffprobeExists = true
-		} else {
-			log.Warnf(`"ffprobe" not found in PATH. Video/audio media info parsing will not work: %v`, err)
+		ffprobe := os.Getenv(constants.ENV_FFPROBE)
+		switch ffprobe {
+		case constants.NULL:
+			log.Printf("mediainfo: force disable ffprobe")
+			return
+		case "":
+			ffprobe, _ = exec.LookPath(constants.FFPROBE)
 		}
+		if ffprobe == "" {
+			log.Tracef("mediainfo: ffprobe not found. video / audio meta can't be parsed. " +
+				"Install ffmpeg/ffprobe in PATH or set " + constants.ENV_FFPROBE + " env to it's binary path")
+		}
+		Ffprobe = ffprobe
 	})
 }
 
@@ -162,7 +171,7 @@ func Init() {
 // It attempts to detect the MIME type if not provided.
 // For image files, it extracts width, height, and calculates a SHA256 signature of pixel data.
 // For video/audio files, it uses ffprobe to extract width, height, and duration.
-// Requires "ffprobe" to be in the system's PATH for video/audio files.
+// Requires ffprobe to be in the system's PATH for video/audio files.
 //
 // Parameters:
 //
@@ -195,10 +204,10 @@ func ParseMediaInfo(input io.Reader, contentType string) (info *MediaFileInfo, e
 }
 
 func ParseVideoAudioMediaInfo(input io.Reader) (info *MediaFileInfo, err error) {
-	if !ffprobeExists {
-		return nil, fmt.Errorf("ffprobe not found in PATH. Please install ffmpeg/ffprobe to parse video/audio media info")
+	if Ffprobe == "" {
+		return nil, fmt.Errorf("ffprobe not found. Please install ffmpeg/ffprobe to parse video/audio media info")
 	}
-	cmd := exec.Command("ffprobe", "-v", "error", "-show_format", "-show_streams", "-print_format", "json", "-")
+	cmd := exec.Command(Ffprobe, "-v", "error", "-show_format", "-show_streams", "-print_format", "json", "-")
 	cmd.Stdin = input
 	var output []byte
 	output, err = cmd.Output()

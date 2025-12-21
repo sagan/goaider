@@ -8,16 +8,17 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os/exec"
 	"time"
 
-	"github.com/google/shlex"
 	"github.com/natefinch/atomic"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"github.com/sagan/goaider/cmd"
+	"github.com/sagan/goaider/constants"
 	"github.com/sagan/goaider/util"
+	"github.com/sagan/goaider/util/helper"
+	"github.com/sagan/goaider/util/stringutil"
 )
 
 const MAX_TRIES = -1
@@ -48,7 +49,9 @@ It outputs to stdout by default.
 }
 
 var (
+	flagUpdate   bool
 	flagForce    bool
+	flagText     bool
 	flagMaxTries int
 	flagOutput   string
 	flagExec     string // execute a cmdline on success
@@ -56,17 +59,24 @@ var (
 
 func init() {
 	cmd.RootCmd.AddCommand(fetchCmd)
-	fetchCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Force overwriting existing file")
+	fetchCmd.Flags().BoolVarP(&flagText, "text", "", false, "Treat http response body as text, "+
+		`normalize it and output canonical UTF-8 (without BOM) and \n line break text contents`)
+	fetchCmd.Flags().BoolVarP(&flagUpdate, "update", "", false,
+		"Update file mode. Use resonse body to update existing file only if their contents are not the same. "+
+			`Implies --force`)
+	fetchCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Force mode. Overwrite existing file")
 	fetchCmd.Flags().IntVarP(&flagMaxTries, "max-tries", "", MAX_TRIES, "Max tries for each interface. -1 for infinite")
 	fetchCmd.Flags().StringVarP(&flagOutput, "output", "o", "-", `Output path. Use "-" for stdout`)
 	fetchCmd.Flags().StringVarP(&flagExec, "exec", "x", "",
-		`Execute a cmdline on success. The response body is passed to cmdline as stdin`)
+		`Execute a cmdline (using system shell) on success. The response body is passed to cmdline as stdin. `+
+			`If --update flag is set, the cmdline is executed only if local file is updated`)
 }
 
 type Request struct {
 	Url      *url.URL
 	MaxTries int
 	Ifname   string
+	Text     bool // text mode
 }
 
 type Response struct {
@@ -78,7 +88,7 @@ type Response struct {
 
 func doFetch(cmd *cobra.Command, args []string) error {
 	if flagOutput != "" && flagOutput != "-" {
-		if exists, err := util.FileExists(flagOutput); err != nil || (exists && !flagForce) {
+		if exists, err := util.FileExists(flagOutput); err != nil || (exists && !flagForce && !flagUpdate) {
 			return fmt.Errorf("output file %q exists or access failed. err: %w", flagOutput, err)
 		}
 	}
@@ -110,6 +120,7 @@ func doFetch(cmd *cobra.Command, args []string) error {
 				Url:      urlObj,
 				Ifname:   iface.Name,
 				MaxTries: flagMaxTries,
+				Text:     flagText,
 			})
 		}
 	}
@@ -121,17 +132,31 @@ func doFetch(cmd *cobra.Command, args []string) error {
 			if flagOutput == "-" {
 				_, err = io.Copy(cmd.OutOrStdout(), bytes.NewReader(resp.Data))
 			} else {
+				if flagUpdate {
+					exists, err := util.FileExists(flagOutput)
+					if err != nil {
+						return err
+					}
+					if exists {
+						existingHash, err := util.HashFile(flagOutput, constants.HASH_SHA256, true)
+						if err != nil {
+							return err
+						}
+						hash, err := util.Hash(bytes.NewReader(resp.Data), constants.HASH_SHA256, true)
+						if err != nil {
+							panic(err)
+						}
+						if existingHash == hash {
+							log.Printf("same contents as existing file, no update")
+							return nil
+						}
+					}
+				}
 				err = atomic.WriteFile(flagOutput, bytes.NewReader((resp.Data)))
 			}
 			if flagExec != "" {
-				if args, err := shlex.Split(flagExec); err == nil && len(args) > 0 {
-					command := exec.Command(args[0], args[1:]...)
-					command.Stdin = bytes.NewReader(resp.Data)
-					err = command.Run()
-					log.Printf("Exec %v, err=%v", args, err)
-				} else {
-					log.Errorf("Invalid exec: err=%v", err)
-				}
+				err := helper.RunCmdline(flagExec, true, bytes.NewReader(resp.Data), nil, nil)
+				log.Printf("Exec %v, err=%v", flagExec, err)
 			}
 			return err
 		}
@@ -171,6 +196,8 @@ func run(ch chan<- *Response, req *Request) {
 		}
 	}
 
+	control := getControl(req.Ifname)
+
 	tries := -1
 	for {
 		tries++
@@ -188,12 +215,11 @@ func run(ch chan<- *Response, req *Request) {
 				Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
 					d := net.Dialer{
 						Timeout: 10 * time.Second,
+						Control: control,
 					}
-					i := tries % (len(DnsServers) + 1)
-					if i == 0 {
-						return d.DialContext(ctx, network, address)
-					}
-					return d.DialContext(ctx, "udp", DnsServers[i-1])
+					// don't use system dns (network & address).
+					i := tries % (len(DnsServers))
+					return d.DialContext(ctx, "udp", DnsServers[i])
 				},
 			},
 			LocalAddr: &net.TCPAddr{
@@ -201,6 +227,7 @@ func run(ch chan<- *Response, req *Request) {
 				Port: 0,                      // Let the OS pick an ephemeral port
 			},
 			Timeout: 30 * time.Second,
+			Control: control,
 		}
 
 		customTransport := &http.Transport{
@@ -235,8 +262,12 @@ func run(ch chan<- *Response, req *Request) {
 			}
 		}
 
+		var body io.Reader = resp.Body
+		if req.Text {
+			body = stringutil.GetTextReader(body)
+		}
 		var data []byte
-		data, err = io.ReadAll(resp.Body)
+		data, err = io.ReadAll(body)
 		resp.Body.Close()
 		if err != nil {
 			ch <- &Response{Err: err, Request: req}

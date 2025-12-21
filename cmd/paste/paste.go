@@ -26,11 +26,13 @@ var pasteCmd = &cobra.Command{
 
 Output file path can be set by [filename] or --output <filename>.
 
-- If {filename} is "-", it outputs clipboard contents to stdout.
-- If {filename} is not "-", it outputs clipboard contents to the file
-  and outputs the full path of written file to stdout on success.
-- If {filename} is not set, a "clipboard-<timestamp>" style name .txt or .png file
-  in dir (default to ".") is used, where <timestamp> is yyyyMMddHHmmss format.`,
+- If [filename] is "-", it outputs clipboard contents to stdout.
+- If [filename] is not "-", it outputs clipboard contents to the file
+- If [filename] is not set, a "clipboard-<timestamp>" style name .txt or .png file
+  in dir (default to ".") is used, where <timestamp> is yyyyMMddHHmmss format.
+
+When [filename] is not "-", it prints the full path of generated file to stdout on success.
+`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: doPaste,
 }

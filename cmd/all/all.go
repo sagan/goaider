@@ -19,6 +19,7 @@ import (
 	_ "github.com/sagan/goaider/cmd/norfilenames"
 	_ "github.com/sagan/goaider/cmd/parsetfef"
 	_ "github.com/sagan/goaider/cmd/paste"
+	_ "github.com/sagan/goaider/cmd/play"
 	_ "github.com/sagan/goaider/cmd/rand"
 	_ "github.com/sagan/goaider/cmd/randb"
 	_ "github.com/sagan/goaider/cmd/randu"

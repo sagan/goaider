@@ -20,8 +20,8 @@ import (
 	"github.com/sagan/goaider/cmd"
 	"github.com/sagan/goaider/constants"
 	"github.com/sagan/goaider/features/clipboard"
-	"github.com/sagan/goaider/features/speaker"
 	"github.com/sagan/goaider/features/translation"
+	"github.com/sagan/goaider/features/ttsfeature"
 	"github.com/sagan/goaider/util"
 	"github.com/sagan/goaider/util/helper"
 	"github.com/sagan/goaider/util/stringutil"
@@ -29,7 +29,7 @@ import (
 
 var translateCmd = &cobra.Command{
 	Use:     "translate [text]",
-	Aliases: []string{"tr", "trans"},
+	Aliases: []string{"tr"},
 	Args:    cobra.MaximumNArgs(1),
 	Short:   "Translate text using Google Cloud Translation API",
 	Long: `Translate text using Google Cloud Translation API.
@@ -171,10 +171,10 @@ func doTranslate(cmd *cobra.Command, args []string) (err error) {
 			if flagPlaySource || flagPlay {
 				go func(sourceLang, source, lang, text string) {
 					if flagPlaySource {
-						speaker.Play(sourceLang, source)
+						ttsfeature.PlayText(sourceLang, source)
 					}
 					if flagPlay {
-						speaker.Play(lang, text)
+						ttsfeature.PlayText(lang, text)
 					}
 				}(detectedSource, input, flagTargetLang, translatedText)
 			}
@@ -245,10 +245,10 @@ func doTranslate(cmd *cobra.Command, args []string) (err error) {
 		if flagPlay || flagPlaySource {
 			for i := range lines {
 				if flagPlaySource {
-					speaker.Play(detectedSources[i], lines[i])
+					ttsfeature.PlayText(detectedSources[i], lines[i])
 				}
 				if flagPlay {
-					speaker.Play(flagTargetLang, translatedLines[i])
+					ttsfeature.PlayText(flagTargetLang, translatedLines[i])
 				}
 			}
 		}
@@ -284,10 +284,10 @@ func doTranslate(cmd *cobra.Command, args []string) (err error) {
 		}
 	}
 	if flagPlaySource {
-		speaker.Play(detectedSource, inputText)
+		ttsfeature.PlayText(detectedSource, inputText)
 	}
 	if flagPlay {
-		speaker.Play(flagTargetLang, translatedText)
+		ttsfeature.PlayText(flagTargetLang, translatedText)
 	}
 
 	return nil

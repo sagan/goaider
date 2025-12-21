@@ -20,7 +20,7 @@ var LanguageTags = map[string]language.Tag{
 	"de":    language.German,
 	"es":    language.Spanish,
 	"pt":    language.Portuguese,
-	"kr":    language.Korean,
+	"ko":    language.Korean,
 	"ru":    language.Russian,
 	"ar":    language.Arabic,
 	"zh-tw": language.TraditionalChinese,
@@ -52,7 +52,7 @@ func Trans(ctx context.Context, client *translate.Client, input string,
 	if resp[0].Source != (language.Tag{}) {
 		sourceLang = resp[0].Source
 	}
-	return resp[0].Text, sourceLang.String(), nil
+	return resp[0].Text, strings.ToLower(sourceLang.String()), nil
 }
 
 func TransAuto(ctx context.Context, client *translate.Client, input string,
@@ -81,7 +81,7 @@ func TransBatch(ctx context.Context, client *translate.Client, inputs []string,
 		if r.Source != (language.Tag{}) {
 			detectedSources[i] = r.Source.String()
 		} else {
-			detectedSources[i] = sourceLang.String()
+			detectedSources[i] = strings.ToLower(sourceLang.String())
 		}
 	}
 	return translatedTexts, detectedSources, nil

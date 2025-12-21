@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -110,7 +109,8 @@ func init() {
 		`The dir will have "`+constants.MIME_DIR+`" mime and zero (0) size. `+
 		`It's guaranteed that dirs appeared before their content files in result csv`)
 	indexfilesCmd.Flags().BoolVarP(&flagParseMedia, "parse-media", "M", false,
-		`Parse media file meta info (width, height, duration, signature). Videos / audios require "ffprobe" in PATH`)
+		`Parse media file meta info (width, height, duration, signature). Videos / audios require "`+constants.FFPROBE+
+			`" in PATH, or set it's binary path via `+constants.ENV_FFPROBE+` env`)
 	indexfilesCmd.Flags().BoolVarP(&flagNoHash, "no-hash", "n", false,
 		"Do not calculate file md5 / sha1 / sha256 hash (faster). The output csv will omit hash fields")
 	indexfilesCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Force overwriting without confirmation")
@@ -133,9 +133,6 @@ func init() {
 }
 
 func indexfiles(cmd *cobra.Command, args []string) (err error) {
-	if flagParseMedia {
-		mediainfo.Init()
-	}
 	if flagOutput != "-" {
 		if exists, err := util.FileExists(flagOutput); err != nil || (exists && !flagForce) {
 			return fmt.Errorf("output file %q exists or can't access, err=%w", flagOutput, err)
@@ -153,11 +150,7 @@ func indexfiles(cmd *cobra.Command, args []string) (err error) {
 		return err
 	}
 	if flagParseMedia {
-		log.Debug("Parsing media info enabled. Checking ffprobe availability...")
-		if _, err := exec.LookPath("ffprobe"); err != nil {
-			return fmt.Errorf("ffprobe not found in PATH. Please install ffmpeg/ffprobe to use --parse-media flag: %w", err)
-		}
-		log.Debug("ffprobe found.")
+		mediainfo.Init()
 	}
 
 	// metaName => metaSuffix

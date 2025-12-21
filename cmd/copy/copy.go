@@ -36,7 +36,7 @@ func init() {
 	cmd.RootCmd.AddCommand(copyCmd)
 	copyCmd.Flags().BoolVarP(&flagImage, "image", "I", false, `Optional: write to clipboard as image. `+
 		`Non-png image will be converted to png first`)
-	copyCmd.Flags().StringVarP(&flagInput, "input", "i", "", `Optional: copy file to clipboard instead of stdin`)
+	copyCmd.Flags().StringVarP(&flagInput, "input", "i", "", `Copy file to clipboard. Use "-" for stdin`)
 }
 
 func doCopy(cmd *cobra.Command, args []string) error {
@@ -46,7 +46,7 @@ func doCopy(cmd *cobra.Command, args []string) error {
 	}
 	var input io.Reader
 	if flagInput != "" && len(args) > 0 {
-		return fmt.Errorf("--input flag and {text} arg are not compatible")
+		return fmt.Errorf("--input flag and {text} arg cann't be both set")
 	}
 	if len(args) > 0 {
 		input = strings.NewReader(args[0])

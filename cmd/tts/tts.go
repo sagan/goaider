@@ -12,8 +12,8 @@ import (
 
 	"github.com/sagan/goaider/cmd"
 	"github.com/sagan/goaider/constants"
-	"github.com/sagan/goaider/features/speaker"
 	"github.com/sagan/goaider/features/translation"
+	"github.com/sagan/goaider/features/ttsfeature"
 	"github.com/sagan/goaider/util"
 	"github.com/sagan/goaider/util/stringutil"
 )
@@ -24,13 +24,18 @@ var ttsCmd = &cobra.Command{
 	Short:   "Convert text to speech and play audio. Windows only",
 	Long: `Convert text to speech and play audio. Windows only.
 
-It uses Google Translate public TTS api, e.g. :
-  http://translate.google.com/translate_tts?ie=UTF-8&q=bonjour&client=t&tl=fr .
-
-It caches generated audio files in CACHE_DIR/` + speaker.CACHE_FOLDER_NAME + ` . Where CACHE_DIR is:
+It caches generated audio files in CACHE_DIR/` + ttsfeature.CACHE_FOLDER_NAME + ` . Where CACHE_DIR is:
 - Linux: $XDG_CACHE_HOME or $HOME/.cache .
 - Darwin: $HOME/Library/Caches .
 - Windows: %LocalAppData% .
+
+By default it plays generated audio directly, which is supported on Windows only.
+You can use --output flag to save generated speech to mp3 file instead, this is supported on every platform.
+
+It uses "` + constants.DEFAULT_TTS + `" tts engine by default. You can change the tts engine by setting ` +
+		constants.ENV_TTS + ` env.
+Available values: "` + constants.TTS_EDGE + `", "` + constants.TTS_GOOGLE +
+		`". All of them are online TTS at this time.
 
 To clean cache, run with "--clean" flag.
 `,
@@ -52,24 +57,27 @@ func init() {
 	ttsCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Force overwriting existing file")
 	ttsCmd.Flags().StringVarP(&flagLang, "lang", "l", "en", `Language to use for TTS. Any of: `+constants.HELP_LANGS)
 	ttsCmd.Flags().StringVarP(&flagInput, "input", "i", "", `Optional: read text from file instead. Use "-" for stdin`)
-	ttsCmd.Flags().StringVarP(&flagOutput, "output", "o", "", `Optional: save generated speech audio (mp3) to file`)
+	ttsCmd.Flags().StringVarP(&flagOutput, "output", "o", "",
+		`Save generated speech audio (mp3) to file instead of playing it. Use "-" for stdout`)
 }
 
 func doTts(cmd *cobra.Command, args []string) error {
-	if flagOutput != "" && flagOutput != "-" {
-		if exists, err := util.FileExists(flagOutput); err != nil || (exists && !flagForce) {
-			return fmt.Errorf("output file %q exists or access failed. err: %w", flagOutput, err)
+	ttsfeature.Init()
+	if flagOutput != "" {
+		if flagOutput != "-" {
+			if exists, err := util.FileExists(flagOutput); err != nil || (exists && !flagForce) {
+				return fmt.Errorf("output file %q exists or access failed. err: %w", flagOutput, err)
+			}
+		} else if term.IsTerminal(int(os.Stdout.Fd())) {
+			return fmt.Errorf("--output is - but stdout is tty")
 		}
-	}
-	if flagOutput == "-" && term.IsTerminal(int(os.Stdout.Fd())) {
-		return fmt.Errorf("output is tty. Use pipe, file path or omit --output to play directly")
 	}
 	if _, exists := translation.LanguageTags[flagLang]; !exists {
 		return fmt.Errorf("unsupported lang %s", flagLang)
 	}
 
 	if flagClean {
-		return speaker.CleanCacheDir()
+		return ttsfeature.CleanCacheDir()
 	}
 
 	var input io.Reader
@@ -100,17 +108,17 @@ func doTts(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	speaker, err := speaker.GetSpeaker(flagLang)
+	sp, err := ttsfeature.NewSpeaker(flagLang)
 	if err != nil {
 		return err
 	}
-	filename, err := speaker.GenerateAndSpeak(text)
+	filename, err := sp.Generate(text)
 	if err != nil {
 		return err
 	}
-
 	if flagOutput != "" {
-		file, err := os.Open(filename)
+		var file *os.File
+		file, err = os.Open(filename)
 		if err != nil {
 			return err
 		}
@@ -120,9 +128,12 @@ func doTts(cmd *cobra.Command, args []string) error {
 		} else {
 			err = atomic.WriteFile(flagOutput, file)
 		}
-		if err != nil {
-			return err
-		}
+	} else {
+		err = ttsfeature.PlayAudioFile(filename)
 	}
+	if err != nil {
+		return err
+	}
+
 	return nil
 }

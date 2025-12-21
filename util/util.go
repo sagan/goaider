@@ -628,7 +628,8 @@ func HashFile(filename string, hashType string, hex bool) (sha256 string, err er
 	return Hash(f, hashType, hex)
 }
 
-// If hex is true, return hex string; otherwise return URL-safe base64
+// If hex is true, return hex string; otherwise return URL-safe base64.
+// If returns an error only if hashType is not supported, or when input read error.
 func Hash(input io.Reader, hashType string, hex bool) (string string, err error) {
 	var h hash.Hash
 	switch hashType {
@@ -697,9 +698,12 @@ func FirstNonZeroArg[T comparable](args ...T) T {
 
 // Get mime type (e.g. "text/plain") from file path / name / ext.
 // Returned mime type doesn't have parameter part (like "; charset=utf-8").
-// Return empty string if mime is unknown.
+// It always return a valid mime: returns application/octet-stream if mime is unknown.
 func GetMimeType(filename string) string {
 	mimeType := mime.TypeByExtension(strings.ToLower(filepath.Ext(filename)))
+	if mimeType == "" {
+		mimeType = constants.MIME_BINARY
+	}
 	if i := strings.IndexByte(mimeType, ';'); i != -1 {
 		mimeType = mimeType[:i]
 	}
@@ -725,7 +729,7 @@ func DetectContentType(input io.Reader) (reader io.Reader, contentType string, e
 
 	if n == 0 {
 		// Empty stream: choose a default. (Could also be "text/plain; charset=utf-8" depending on your use case.)
-		return input, "application/octet-stream", nil
+		return input, constants.MIME_BINARY, nil
 	}
 
 	peek := buf[:n]
