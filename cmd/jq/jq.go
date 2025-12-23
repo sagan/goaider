@@ -8,12 +8,13 @@ import (
 	"strings"
 
 	"github.com/natefinch/atomic"
+	"github.com/spf13/cobra"
+
 	"github.com/sagan/goaider/cmd"
 	"github.com/sagan/goaider/constants"
 	"github.com/sagan/goaider/util"
 	"github.com/sagan/goaider/util/helper"
 	"github.com/sagan/goaider/util/stringutil"
-	"github.com/spf13/cobra"
 )
 
 var jqCmd = &cobra.Command{

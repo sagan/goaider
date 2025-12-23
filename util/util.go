@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"hash"
+	"hash/crc32"
 	"io"
 	"io/fs"
 	"math"
@@ -630,9 +631,23 @@ func HashFile(filename string, hashType string, hex bool) (sha256 string, err er
 
 // If hex is true, return hex string; otherwise return URL-safe base64.
 // If returns an error only if hashType is not supported, or when input read error.
+// Suported hashType: crc32, md5, sha1, sha256.
+// Spacially, for crc32, if hex is false, output in unit32 digit number string format.
 func Hash(input io.Reader, hashType string, hex bool) (string string, err error) {
 	var h hash.Hash
 	switch hashType {
+	case constants.HASH_CRC32:
+		crc32q := crc32.MakeTable(crc32.IEEE)
+		data, err := io.ReadAll(input)
+		if err != nil {
+			return "", err
+		}
+		h := crc32.Checksum(data, crc32q)
+		if hex {
+			return fmt.Sprintf("%08x", h), nil
+		} else {
+			return fmt.Sprintf("%d", h), nil
+		}
 	case constants.HASH_SHA256:
 		h = sha256.New()
 	case constants.HASH_MD5:

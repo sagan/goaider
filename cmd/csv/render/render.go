@@ -43,7 +43,7 @@ func init() {
 func doRender(cmd *cobra.Command, args []string) (err error) {
 	argInput := args[0]
 
-	err = helper.InputTextFileAndOutput(argInput, csvCmd.FlagOutput, csvCmd.FlagForce, func(r io.Reader,
+	err = helper.InputFileAndOutput(argInput, csvCmd.FlagOutput, true, csvCmd.FlagForce, func(r io.Reader,
 		w io.Writer, inputName, outputNme string) error {
 		return renderCsv(r, flagTemplate, csvCmd.FlagNoHeader, w, flagOneLine)
 	})

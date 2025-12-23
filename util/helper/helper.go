@@ -59,14 +59,19 @@ func system(cmdline any) int {
 }
 
 // Recognize "*.txt" style glob, return parsed filenames.
+// Special cases: "-" is preserved as is; empty string elements are removed.
 func ParseFilenameArgs(args ...string) []string {
 	names := []string{}
 	for _, arg := range args {
-		filenames := ParseGlobFilenames(arg)
-		if filenames == nil {
+		if arg == "-" {
 			names = append(names, arg)
-		} else {
-			names = append(names, filenames...)
+		} else if arg != "" {
+			filenames := ParseGlobFilenames(arg)
+			if filenames == nil {
+				names = append(names, arg)
+			} else {
+				names = append(names, filenames...)
+			}
 		}
 	}
 	names = util.UniqueSlice(names)
@@ -382,10 +387,11 @@ func MakeCleanTmpDir(tmpdir string) error {
 // Arguments:
 // - input: Filename or "-" for stdin. Must not be empty.
 // - output: Filename or "-" for stdout.
+// - textMode: bool, if true, input & output are assumed to be text files and will be converted to UTF-8.
 // - processor: Function that reads from r and writes to w.
 // - force: If true, allows overwriting existing output files.
-func InputTextFileAndOutput(input, output string, force bool, processor func(r io.Reader, w io.Writer,
-	inputName, outputNme string) error) error {
+func InputFileAndOutput(input, output string, textMode bool, force bool, processor func(r io.Reader, w io.Writer,
+	inputName, outputNme string) error) (err error) {
 	if input == "" {
 		return errors.New("input argument must not be empty")
 	}
@@ -415,22 +421,24 @@ func InputTextFileAndOutput(input, output string, force bool, processor func(r i
 
 	// 3. Open Input Stream
 	var reader io.Reader
+	var f *os.File
 	if input == "-" {
 		reader = os.Stdin
 	} else {
-		f, err := os.Open(input)
+		f, err = os.Open(input)
 		if err != nil {
 			return err
 		}
 		defer f.Close()
 		reader = f
 	}
-	reader = stringutil.GetTextReader(reader)
+	if textMode {
+		reader = stringutil.GetTextReader(reader)
+	}
 
 	// 4. Setup Output Stream & Temp File Logic
 	var writer io.Writer
 	var tempFile *os.File
-	var err error
 
 	if output == "-" {
 		writer = os.Stdout
@@ -458,6 +466,9 @@ func InputTextFileAndOutput(input, output string, force bool, processor func(r i
 		return err
 	}
 
+	if f != nil {
+		f.Close()
+	}
 	// 6. Finalize File Output (if applicable)
 	if tempFile != nil {
 		tempName := tempFile.Name()
@@ -583,4 +594,54 @@ func RunCmdline(cmdline string, shell bool, stdin io.Reader, stdout, stderr io.W
 	command.Stdout = stdout
 	command.Stderr = stderr
 	return command.Run()
+}
+
+func DoHashSum(hashType string, text string, filenames []string, output string, hex bool, force bool,
+	stdin io.Reader, stdout, stderr io.Writer) (err error) {
+	if output != "-" {
+		if exists, err := util.FileExists(output); err != nil || (exists && !force) {
+			return fmt.Errorf("output file %q exists or can't access, err=%w", output, err)
+		}
+	}
+	if text != "" && len(filenames) > 0 {
+		return fmt.Errorf("text and filenames can not be both set")
+	} else if text == "" && len(filenames) == 0 {
+		return fmt.Errorf("no input")
+	}
+
+	var outputBuilder strings.Builder
+
+	if text != "" {
+		hash, err := util.Hash(strings.NewReader(text), hashType, hex)
+		if err != nil {
+			return fmt.Errorf("failed to calculate %s for stdin: %w", hashType, err)
+		}
+		outputBuilder.WriteString(fmt.Sprintf("%s  -\n", hash))
+	} else {
+		filenames := ParseFilenameArgs(filenames...)
+		// Read from files
+		for _, filename := range filenames {
+			var hash string
+			if filename == "-" {
+				hash, err = util.Hash(stdin, hashType, hex)
+			} else {
+				hash, err = util.HashFile(filename, hashType, hex)
+			}
+			if err != nil {
+				fmt.Fprintf(stderr, "%ssum: %s: %v\n", hashType, filename, err)
+				continue
+			}
+			outputBuilder.WriteString(fmt.Sprintf("%s  %s\n", hash, filename))
+		}
+	}
+	outputString := outputBuilder.String()
+	if output == "-" {
+		_, err = fmt.Print(outputString)
+	} else {
+		err = atomic.WriteFile(output, strings.NewReader(outputString))
+	}
+	if err != nil {
+		return err
+	}
+	return nil
 }

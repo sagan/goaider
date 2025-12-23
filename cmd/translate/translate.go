@@ -78,8 +78,8 @@ func init() {
 		`Play source text as speech. It works on Windows only`)
 	translateCmd.Flags().StringVarP(&flagTargetLang, "target", "t", "en",
 		`Target language. Any of: `+constants.HELP_LANGS)
-	translateCmd.Flags().StringVarP(&flagSourceLang, "source", "s", "auto",
-		`Source language. Any of: "auto", `+constants.HELP_LANGS)
+	translateCmd.Flags().StringVarP(&flagSourceLang, "source", "s", constants.AUTO,
+		`Source language. Any of: "`+constants.AUTO+`", `+constants.HELP_LANGS)
 	translateCmd.Flags().StringVarP(&flagInput, "input", "i", "", `Read text from input file. Use "-" for stdin`)
 	translateCmd.Flags().StringVarP(&flagOutput, "output", "o", "-", `Output file path. Use "-" for stdout`)
 	translateCmd.Flags().StringVarP(&flagOutputPrefix, "output-prefix", "", "",
@@ -109,7 +109,7 @@ func doTranslate(cmd *cobra.Command, args []string) (err error) {
 	} else {
 		targetLang = tag
 	}
-	if flagSourceLang != "" && flagSourceLang != "auto" {
+	if flagSourceLang != "" && flagSourceLang != constants.AUTO {
 		if tag, ok := translation.LanguageTags[flagSourceLang]; !ok {
 			return fmt.Errorf("unsupported source lang %s", flagSourceLang)
 		} else {

@@ -69,7 +69,7 @@ func uniq(cmd *cobra.Command, args []string) (err error) {
 		csv.FlagForce = true // implied overwrite
 	}
 
-	err = helper.InputTextFileAndOutput(argInput, csv.FlagOutput, csv.FlagForce, func(r io.Reader, w io.Writer,
+	err = helper.InputFileAndOutput(argInput, csv.FlagOutput, true, csv.FlagForce, func(r io.Reader, w io.Writer,
 		inputName, outputNme string) error {
 		duplicates, err := uniqCsvFile(r, flagKey, w, nil, csv.FlagNoHeader)
 		if err == nil {

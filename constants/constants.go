@@ -33,10 +33,14 @@ const (
 	MIME_MP3    = "audio/mpeg"
 	MIME_WAV    = "audio/wave"
 
+	HASH_CRC32  = "crc32"
 	HASH_MD5    = "md5"
 	HASH_SHA1   = "sha1"
 	HASH_SHA256 = "sha256"
 
+	CHARSET_UTF8 = "utf-8"
+
+	AUTO = "auto"
 	NULL = "null"
 )
 
@@ -65,3 +69,5 @@ const HELP_TEMPERATURE_FLAG = `The temperature to use for the model. Range 0.0-2
 
 // Normal languages that people actually use. No political correct or DEI ones.
 const HELP_LANGS = `"en", "ja", "fr", "de", "es", "pt", "ko", "ru", "ar", "zh-tw", "zh", "zh-cn", "cht", "chs"`
+
+const HELP_CHARSETS = `"utf-8", "gb-18030", "big5", "euc-jp", "iso-2022-jp", "shift_jis", "euc-kr", "utf-16be", "utf-16le". Case insensitive`

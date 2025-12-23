@@ -2,6 +2,7 @@ package stringutil
 
 import (
 	"fmt"
+	"io"
 	"strings"
 	"unicode"
 
@@ -17,16 +18,25 @@ var (
 	ErrSeemsInvalid = fmt.Errorf("input seems not a valid string of specified charset")
 )
 
-// Key: IANA charset name (case sensitive) used by chardet.
+// Key: IANA charset name (lower case) used by chardet.
+// https://www.iana.org/assignments/character-sets/character-sets.xhtml .
+// https://github.com/saintfish/chardet/blob/5e3ef4b5456d970814525f09c1f176294f1751a9/detector_test.go .
 var encodings = map[string]encoding.Encoding{
-	"GB-18030":    simplifiedchinese.GB18030,
-	"Big5":        traditionalchinese.Big5,
-	"EUC-JP":      japanese.EUCJP, // GBK 字符串容易被误识别为 EUC-JP。
-	"ISO-2022-JP": japanese.ISO2022JP,
-	"Shift_JIS":   japanese.ShiftJIS,
-	"EUC-KR":      korean.EUCKR,
-	"UTF-16BE":    unicodeEncoding.UTF16(unicodeEncoding.BigEndian, unicodeEncoding.IgnoreBOM),
-	"UTF-16LE":    unicodeEncoding.UTF16(unicodeEncoding.LittleEndian, unicodeEncoding.IgnoreBOM),
+	"gb-18030":    simplifiedchinese.GB18030,
+	"big5":        traditionalchinese.Big5,
+	"euc-jp":      japanese.EUCJP, // GBK 字符串容易被误识别为 EUC-JP。
+	"iso-2022-jp": japanese.ISO2022JP,
+	"shift_jis":   japanese.ShiftJIS,
+	"euc-kr":      korean.EUCKR,
+	"utf-16be":    unicodeEncoding.UTF16(unicodeEncoding.BigEndian, unicodeEncoding.IgnoreBOM),
+	"utf-16le":    unicodeEncoding.UTF16(unicodeEncoding.LittleEndian, unicodeEncoding.IgnoreBOM),
+}
+
+func DecodeInput(input io.Reader, charset string) (output io.Reader, err error) {
+	if enc, ok := encodings[strings.ToLower(charset)]; ok {
+		return enc.NewDecoder().Reader(input), nil
+	}
+	return nil, fmt.Errorf("unsupported charset %s", charset)
 }
 
 func DecodeText(input []byte, charset string, force bool) ([]byte, error) {
@@ -36,7 +46,7 @@ func DecodeText(input []byte, charset string, force bool) ([]byte, error) {
 		}
 		return input, nil
 	}
-	if enc, ok := encodings[charset]; ok {
+	if enc, ok := encodings[strings.ToLower(charset)]; ok {
 		output, err := enc.NewDecoder().Bytes(input)
 		if !force && strings.ContainsRune(string(output), '�') { // U+FFFD, unicode REPLACEMENT CHARACTER
 			return output, ErrSeemsInvalid
@@ -81,7 +91,7 @@ func GetCjkCharsetStrings(strs ...string) (result []string) {
 			continue
 		}
 		for _, charset := range charsets {
-			if bstr, err := encodings[charset].NewEncoder().String(str); err == nil {
+			if bstr, err := encodings[strings.ToLower(charset)].NewEncoder().String(str); err == nil {
 				result = append(result, bstr)
 			}
 		}
