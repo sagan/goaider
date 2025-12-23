@@ -15,6 +15,7 @@ import (
 	_ "github.com/sagan/goaider/cmd/findfiles"
 	_ "github.com/sagan/goaider/cmd/indexfiles"
 	_ "github.com/sagan/goaider/cmd/jq"
+	_ "github.com/sagan/goaider/cmd/jsonschema"
 	_ "github.com/sagan/goaider/cmd/md5sum"
 	_ "github.com/sagan/goaider/cmd/mediainfo"
 	_ "github.com/sagan/goaider/cmd/norfilenames"

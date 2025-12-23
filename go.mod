@@ -8,6 +8,7 @@ replace github.com/richinsley/comfy2go => ./comfy2go
 
 require (
 	cloud.google.com/go/translate v1.12.7
+	github.com/JLugagne/jsonschema-infer v0.1.2
 	github.com/c-bata/go-prompt v0.2.6
 	github.com/disintegration/imaging v1.6.2
 	github.com/dop251/goja v0.0.0-20251201205617-2bb4c724c0f9
