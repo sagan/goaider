@@ -12,10 +12,13 @@ import (
 	"github.com/sagan/goaider/util/helper"
 )
 
-var randCmd = &cobra.Command{
+var watchCmd = &cobra.Command{
 	Use:   "watch {cmdline}",
 	Short: `Similar to Linux "watch" utility`,
 	Long: `Similar to Linux "watch" utility.
+
+Its's recommanded to put a "--" in the beginning of the cmdline to avoid issues with argument parsing.
+By default the cmdline is parsed by "sh -c" / "cmd /C", use "--exec" flag to execute the cmdline directly.
 
 Examples:
   goaider watch -n 10 echo foo bar
@@ -68,9 +71,9 @@ func doWatch(cmd *cobra.Command, args []string) (err error) {
 }
 
 func init() {
-	randCmd.Flags().IntVarP(&flagInterval, "interval", "n", 2, "Specify update interval (seconds)")
-	randCmd.Flags().BoolVarP(&flagExec, "exec", "x", false,
+	watchCmd.Flags().IntVarP(&flagInterval, "interval", "n", 2, "Specify update interval (seconds)")
+	watchCmd.Flags().BoolVarP(&flagExec, "exec", "x", false,
 		`Exec process directly instead of using "cmd /C" or "sh -c"`)
-	randCmd.Flags().BoolVarP(&flagErrExit, "errexit", "", false, "Exit if command returns a non-zero exit code")
-	cmd.RootCmd.AddCommand(randCmd)
+	watchCmd.Flags().BoolVarP(&flagErrExit, "errexit", "", false, "Exit if command returns a non-zero exit code")
+	cmd.RootCmd.AddCommand(watchCmd)
 }

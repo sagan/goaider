@@ -1,24 +1,19 @@
 package readtext
 
 import (
-	"bytes"
 	"fmt"
-	"io"
 	"strings"
 
-	"github.com/saintfish/chardet"
-	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"github.com/sagan/goaider/cmd"
 	"github.com/sagan/goaider/constants"
-	"github.com/sagan/goaider/util/helper"
-	"github.com/sagan/goaider/util/stringutil"
+	"github.com/sagan/goaider/features/textfeature"
 )
 
 var readtextCmd = &cobra.Command{
 	Use:     "readtext {file.txt | -}",
-	Aliases: []string{"rt"},
+	Aliases: []string{"rt", "readtxt"},
 	Short:   `Read a text file and normalize it, output UTF-8 (without BOM) & \n line break text contents`,
 	Long: `Read a text file and normalize it, output UTF-8 (without BOM) & \n line break text contents.
 
@@ -53,38 +48,7 @@ func doReadtext(cmd *cobra.Command, args []string) (err error) {
 		flagOutput = argInput
 		overwrite = true
 	}
-	err = helper.InputFileAndOutput(argInput, flagOutput, false, overwrite, func(r io.Reader, w io.Writer,
-		inputName, outputName string) (err error) {
-		if flagCharset == "utf-8" {
-			_, err = io.Copy(w, stringutil.GetTextReader(r))
-			return err
-		} else if flagCharset != "" && flagCharset != constants.AUTO {
-			var output io.Reader
-			output, err = stringutil.DecodeInput(r, flagCharset)
-			if err != nil {
-				return err
-			}
-			_, err = io.Copy(w, stringutil.GetTextReader(output))
-			return err
-		}
-
-		data, err := io.ReadAll(r)
-		if err != nil {
-			return err
-		}
-		detector := chardet.NewTextDetector()
-		charset, err := detector.DetectBest(data)
-		if err != nil || charset.Confidence < flagCharsetDetectionThreshold {
-			return fmt.Errorf("can not get text file encoding: guess=%v, err=%v", charset, err)
-		}
-		log.Printf("detected charset: %v", charset)
-		data, err = stringutil.DecodeText(data, charset.Charset, flagForce)
-		if err != nil {
-			return err
-		}
-		_, err = io.Copy(w, stringutil.GetTextReader(bytes.NewReader(data)))
-		return err
-	})
+	err = textfeature.Txt2Utf8(argInput, flagOutput, flagCharset, flagCharsetDetectionThreshold, overwrite, flagForce)
 	if err != nil {
 		return err
 	}

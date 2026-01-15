@@ -373,6 +373,10 @@ func MakeCleanTmpDir(tmpdir string) error {
 	return os.MkdirAll(tmpdir, 0755)
 }
 
+// ErrAbort is a special error that can be returned by a processor function
+// to indicate that the output file should not be written.
+var ErrAbort = errors.New("abort writing output file")
+
 // Read a text input file, process it using custom function and output the result.
 // The input text is normalized (converted to UTF-8 without BOM and \n line break) before being processed,
 // UTF-8 w/o BOM / UTF-16 LE BOM / UTF-16 BE BOM source encodings are supported.
@@ -388,7 +392,7 @@ func MakeCleanTmpDir(tmpdir string) error {
 // - input: Filename or "-" for stdin. Must not be empty.
 // - output: Filename or "-" for stdout.
 // - textMode: bool, if true, input & output are assumed to be text files and will be converted to UTF-8.
-// - processor: Function that reads from r and writes to w.
+// - processor: Function that reads from r and writes to w. It can return ErrAbort to abort writing output file
 // - force: If true, allows overwriting existing output files.
 func InputFileAndOutput(input, output string, textMode bool, force bool, processor func(r io.Reader, w io.Writer,
 	inputName, outputNme string) error) (err error) {
@@ -463,6 +467,9 @@ func InputFileAndOutput(input, output string, textMode bool, force bool, process
 
 	// 5. Run the Processor
 	if err := processor(reader, writer, input, output); err != nil {
+		if err == ErrAbort {
+			return nil
+		}
 		return err
 	}
 
