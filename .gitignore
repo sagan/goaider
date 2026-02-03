@@ -5,6 +5,7 @@
 /goaider
 /.local
 /.data
+dist
 
 # experiment files in root dir
 /*.*
