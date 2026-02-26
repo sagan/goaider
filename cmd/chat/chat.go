@@ -10,7 +10,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/c-bata/go-prompt"
+	"github.com/elk-language/go-prompt"
 	"github.com/invopop/jsonschema"
 	jsonschemaValidator "github.com/kaptinlin/jsonschema"
 	"github.com/natefinch/atomic"
@@ -81,11 +81,6 @@ func init() {
 	cmd.RootCmd.AddCommand(chatCmd)
 }
 
-func shellCompleter(d prompt.Document) []prompt.Suggest {
-	s := []prompt.Suggest{}
-	return prompt.FilterHasPrefix(s, d.GetWordBeforeCursor(), true)
-}
-
 func doChat(cmd *cobra.Command, args []string) (err error) {
 	if flagAutoCopyOnly {
 		flagAutoCopy = true
@@ -142,8 +137,8 @@ func doChat(cmd *cobra.Command, args []string) (err error) {
 				clipboard.CopyString(response.String())
 			}
 			fmt.Printf("\n")
-		}, shellCompleter, prompt.OptionTitle("goaider-chat"))
-		// https://github.com/c-bata/go-prompt/issues/265
+		}, prompt.WithTitle("goaider-chat"))
+		// https://github.com/elk-language/go-prompt/issues/265
 		if runtime.GOOS != "windows" {
 			defer exec.Command("reset").Run()
 		}

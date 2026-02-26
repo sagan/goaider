@@ -6,15 +6,18 @@ go 1.25
 // Mod to fix some problems. See @mod .
 replace github.com/richinsley/comfy2go => ./comfy2go
 
+// fix-paste-delay
+replace github.com/elk-language/go-prompt => github.com/sagan/go-prompt v0.0.0-20260226033802-4394e0cac252
+
 require (
 	cloud.google.com/go/translate v1.12.7
 	github.com/JLugagne/jsonschema-infer v0.1.2
-	github.com/c-bata/go-prompt v0.2.6
 	github.com/disintegration/imaging v1.6.2
 	github.com/dop251/goja v0.0.0-20251201205617-2bb4c724c0f9
 	github.com/dop251/goja_nodejs v0.0.0-20251015164255-5e94316bedaf
 	github.com/dsoprea/go-exif/v3 v3.0.1
 	github.com/ebitengine/oto/v3 v3.4.0
+	github.com/elk-language/go-prompt v1.3.1
 	github.com/go-sprout/sprout v1.0.2
 	github.com/gobwas/glob v0.2.3
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
@@ -93,9 +96,9 @@ require (
 	github.com/kdomanski/iso9660 v0.3.3 // indirect
 	github.com/klauspost/compress v1.16.3 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
-	github.com/mattn/go-colorable v0.1.7 // indirect
-	github.com/mattn/go-isatty v0.0.12 // indirect
-	github.com/mattn/go-tty v0.0.3 // indirect
+	github.com/mattn/go-colorable v0.1.14 // indirect
+	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/mattn/go-tty v0.0.7 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
@@ -109,6 +112,7 @@ require (
 	github.com/pkg/term v1.2.0-beta.2 // indirect
 	github.com/richardlehane/mscfb v1.0.4 // indirect
 	github.com/richardlehane/msoleps v1.0.4 // indirect
+	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/ryszard/tfutils v0.0.0-20161028141955-98de232c7c68 // indirect
 	github.com/spf13/cast v1.9.2 // indirect
 	github.com/spf13/pflag v1.0.9 // indirect

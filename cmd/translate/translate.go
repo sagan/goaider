@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"cloud.google.com/go/translate"
-	"github.com/c-bata/go-prompt"
+	"github.com/elk-language/go-prompt"
 	"github.com/natefinch/atomic"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -89,11 +89,6 @@ func init() {
 			`Context: {text: "translated text", original: "original text", target: "en", source: "ja"}, `+
 			`where target / source is the language of translated / original text. `+constants.HELP_TEMPLATE_FLAG)
 	cmd.RootCmd.AddCommand(translateCmd)
-}
-
-func shellCompleter(d prompt.Document) []prompt.Suggest {
-	s := []prompt.Suggest{}
-	return prompt.FilterHasPrefix(s, d.GetWordBeforeCursor(), true)
 }
 
 func doTranslate(cmd *cobra.Command, args []string) (err error) {
@@ -179,9 +174,9 @@ func doTranslate(cmd *cobra.Command, args []string) (err error) {
 				}(detectedSource, input, flagTargetLang, translatedText)
 			}
 			fmt.Printf("%s\n", response)
-		}, shellCompleter, prompt.OptionLivePrefix(func() (prefix string, useLivePrefix bool) {
-			return fmt.Sprintf("(%s) > ", flagTargetLang), true
-		}), prompt.OptionTitle("goaider-translate"))
+		}, prompt.WithPrefixCallback(func() string {
+			return fmt.Sprintf("(%s) > ", flagTargetLang)
+		}), prompt.WithTitle("goaider-translate"))
 		if runtime.GOOS != "windows" {
 			defer exec.Command("reset").Run()
 		}
