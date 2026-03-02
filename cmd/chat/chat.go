@@ -41,7 +41,20 @@ Examples:
 
 By default it outputs to stdout. Use --output flag to output to file.
 
-Running "goaider chat" without providing any input will open a simple interactive shell`,
+It supports Gemini / OpenAI / OpenRouter / Any OpenAI API compatible models.
+
+- Gemini : https://ai.google.dev/gemini-api/docs/models
+- OpenAI : https://developers.openai.com/api/docs/models
+- OpenRouter : https://openrouter.ai/models
+- OpenAI API compatible : like self-hosting models via vllm / ollama.
+
+See help of "--model" flag for how to config the model.
+
+Running "goaider chat" without providing any input will open a simple interactive shell,
+
+Some special directives are available in shell:
+- /clear , /c : Reset / Clear current LLM session
+`,
 	RunE: doChat,
 }
 
@@ -109,7 +122,8 @@ func doChat(cmd *cobra.Command, args []string) (err error) {
 			return fmt.Errorf("no input is provided and not in tty")
 		}
 		p := prompt.New(func(input string) {
-			if input == "/clear" {
+			input = strings.TrimSpace(input)
+			if input == "/clear" || input == "/c" {
 				openaiReq.Messages = nil
 				fmt.Printf("<session cleared>\n")
 				return

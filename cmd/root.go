@@ -30,6 +30,7 @@ func init() {
 }
 
 func Execute() {
+	cobra.MousetrapHelpText = ""
 	cobra.OnInitialize(sync.OnceFunc(func() {
 		for _, env := range FlagEnv {
 			parts := strings.SplitN(env, "=", 2)

@@ -146,6 +146,7 @@ func doTranslate(cmd *cobra.Command, args []string) (err error) {
 			return fmt.Errorf("no input is provided and not in tty")
 		}
 		p := prompt.New(func(input string) {
+			input = strings.TrimSpace(input)
 			if tag, ok := translation.LanguageTags[input]; ok {
 				flagTargetLang = input
 				targetLang = tag

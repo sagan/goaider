@@ -20,11 +20,11 @@ import (
 )
 
 var renderCmd = &cobra.Command{
-	Use:   "render {template} -v name=value",
+	Use:   "render [template] -v name=value",
 	Short: "Render a Go text template",
 	Long: `Render a Go text template.
 
-The {template} is Go text template string, if it starts with "@", treat it (everything after "@") as filename
+The [template] is Go text template string, if it starts with "@", treat it (everything after "@") as filename
 and load template contents from file instead.
 Alternatively, you can also use --input flag to specify the template file name.
 
@@ -68,7 +68,7 @@ func doRender(cmd *cobra.Command, args []string) (err error) {
 	}
 	template := ""
 	if flagInput != "" && len(args) > 0 {
-		return fmt.Errorf("only one of --input flag and {template} argument can be set")
+		return fmt.Errorf("only one of --input flag and [template] argument can be set")
 	} else if flagInput != "" {
 		template = "@" + flagInput
 	} else if len(args) > 0 {
