@@ -17,7 +17,7 @@ import (
 
 var base64encodeCmd = &cobra.Command{
 	Use:     "base64encode [text]",
-	Aliases: []string{"b64e"},
+	Aliases: []string{"b64e", "be"},
 	Short:   "Base64 encode",
 	Long:    `Base64 encode.`,
 	RunE:    doBase64encode,

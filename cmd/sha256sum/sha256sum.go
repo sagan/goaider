@@ -20,18 +20,22 @@ It outputs in same format as Linux's "sha256sum" util.`,
 }
 
 var (
-	flagForce  bool
-	flagText   string
-	flagOutput string
+	flagForce    bool
+	flagBase64   bool
+	flagHashOnly bool
+	flagText     string
+	flagOutput   string
 )
 
 func doSha256sum(cmd *cobra.Command, args []string) (err error) {
-	return helper.DoHashSum(constants.HASH_SHA256, flagText, args, flagOutput, true, flagForce,
-		cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr())
+	return helper.DoHashSum(constants.HASH_SHA256, flagText, args, flagOutput, !flagBase64, flagForce,
+		cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), flagHashOnly)
 }
 
 func init() {
 	sha256sumCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Force overwriting without confirmation")
+	sha256sumCmd.Flags().BoolVarP(&flagBase64, "base64", "b", false, "Output base64 string")
+	sha256sumCmd.Flags().BoolVarP(&flagHashOnly, "hash-only", "", false, "Output hash only, no filename")
 	sha256sumCmd.Flags().StringVarP(&flagText, "text", "t", "", `Use text as input instead`)
 	sha256sumCmd.Flags().StringVarP(&flagOutput, "output", "o", "-", `Output file path. Use "-" for stdout`)
 	cmd.RootCmd.AddCommand(sha256sumCmd)

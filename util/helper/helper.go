@@ -604,7 +604,7 @@ func RunCmdline(cmdline string, shell bool, stdin io.Reader, stdout, stderr io.W
 }
 
 func DoHashSum(hashType string, text string, filenames []string, output string, hex bool, force bool,
-	stdin io.Reader, stdout, stderr io.Writer) (err error) {
+	stdin io.Reader, stdout, stderr io.Writer, hashOnly bool) (err error) {
 	if output != "-" {
 		if exists, err := util.FileExists(output); err != nil || (exists && !force) {
 			return fmt.Errorf("output file %q exists or can't access, err=%w", output, err)
@@ -638,7 +638,11 @@ func DoHashSum(hashType string, text string, filenames []string, output string, 
 				fmt.Fprintf(stderr, "%ssum: %s: %v\n", hashType, filename, err)
 				continue
 			}
-			outputBuilder.WriteString(fmt.Sprintf("%s  %s\n", hash, filename))
+			if hashOnly {
+				outputBuilder.WriteString(hash + "\n")
+			} else {
+				outputBuilder.WriteString(fmt.Sprintf("%s  %s\n", hash, filename))
+			}
 		}
 	}
 	outputString := outputBuilder.String()

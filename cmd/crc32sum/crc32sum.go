@@ -20,20 +20,22 @@ It uses IEEE standard crc32 polynomial of 0xedb88320.
 }
 
 var (
-	flagForce  bool
-	flagDigit  bool
-	flagText   string
-	flagOutput string
+	flagForce    bool
+	flagDigit    bool
+	flagHashOnly bool
+	flagText     string
+	flagOutput   string
 )
 
 func doCrc32sum(cmd *cobra.Command, args []string) (err error) {
 	return helper.DoHashSum(constants.HASH_CRC32, flagText, args, flagOutput, !flagDigit, flagForce,
-		cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr())
+		cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), flagHashOnly)
 }
 
 func init() {
 	crc32sumCmd.Flags().BoolVarP(&flagForce, "force", "", false, "Force overwriting without confirmation")
 	crc32sumCmd.Flags().BoolVarP(&flagDigit, "digit", "d", false, "Output crc32 in digit number form")
+	crc32sumCmd.Flags().BoolVarP(&flagHashOnly, "hash-only", "", false, "Output hash only, no filename")
 	crc32sumCmd.Flags().StringVarP(&flagText, "text", "t", "", `Use text as input instead`)
 	crc32sumCmd.Flags().StringVarP(&flagOutput, "output", "o", "-", `Output file path. Use "-" for stdout`)
 	cmd.RootCmd.AddCommand(crc32sumCmd)

@@ -21,13 +21,14 @@ import (
 
 var base64decodeCmd = &cobra.Command{
 	Use:     "base64decode [base64_string]",
-	Aliases: []string{"b64d"},
+	Aliases: []string{"b64d", "bd"},
 	Short:   "Base64 decode",
 	Long: `Base64 decode.
 
 Either [base64_string] argument or --input flag is used as source data.
 If --input is "-", read from stdin.
 
+The input string is being trim spaced before decoding.
 It automatically detects the input base64 string type (standard / URL-safe base64, with or without padding).
 It's also able to decode a "data:" url and output payload data`,
 	RunE: doBase64decode,
@@ -75,7 +76,7 @@ func doBase64decode(cmd *cobra.Command, args []string) (err error) {
 	if !utf8.Valid(inputBytes) {
 		return fmt.Errorf("input is not valid UTF-8. Base64 input must be valid UTF-8")
 	}
-	inputString := string(inputBytes)
+	inputString := strings.TrimSpace(string(inputBytes))
 	var decodedBytes []byte
 	if strings.HasPrefix(inputString, "data:") {
 		dataURL, err := dataurl.DecodeString(inputString)
