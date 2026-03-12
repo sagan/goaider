@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"time"
 
 	"cloud.google.com/go/translate"
 	"github.com/elk-language/go-prompt"
@@ -145,6 +146,8 @@ func doTranslate(cmd *cobra.Command, args []string) (err error) {
 		if !term.IsTerminal(int(os.Stdout.Fd())) {
 			return fmt.Errorf("no input is provided and not in tty")
 		}
+		var lastSignalTime time.Time
+		fmt.Printf(constants.SHELL_TIP)
 		p := prompt.New(func(input string) {
 			input = strings.TrimSpace(input)
 			if tag, ok := translation.LanguageTags[input]; ok {
@@ -177,7 +180,14 @@ func doTranslate(cmd *cobra.Command, args []string) (err error) {
 			fmt.Printf("%s\n", response)
 		}, prompt.WithPrefixCallback(func() string {
 			return fmt.Sprintf("(%s) > ", flagTargetLang)
-		}), prompt.WithTitle("goaider-translate"))
+		}), prompt.WithTitle("goaider-translate"), prompt.WithSignalChecker(func(signal os.Signal) bool {
+			now := time.Now()
+			if now.Sub(lastSignalTime) > constants.CTRL_C_FORCE_EXIT_INTERVAL {
+				lastSignalTime = now
+				return true
+			}
+			return false
+		}))
 		if runtime.GOOS != "windows" {
 			defer exec.Command("reset").Run()
 		}

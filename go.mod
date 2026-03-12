@@ -6,8 +6,9 @@ go 1.26
 // Mod to fix some problems. See @mod .
 replace github.com/richinsley/comfy2go => ./comfy2go
 
-// fix-paste-delay
-replace github.com/elk-language/go-prompt => github.com/sagan/go-prompt v0.0.0-20260226033802-4394e0cac252
+// fix-paste-delay and other mods
+// replace github.com/elk-language/go-prompt => ../go-prompt
+replace github.com/elk-language/go-prompt => github.com/sagan/go-prompt v0.0.0-20260312090041-ecf2c08e0777
 
 require (
 	cloud.google.com/go/translate v1.12.7

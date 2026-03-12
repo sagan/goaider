@@ -215,8 +215,8 @@ github.com/rwcarlsen/goexif v0.0.0-20190401172101-9e8deecbddbd h1:CmH9+J6ZSsIjUK
 github.com/rwcarlsen/goexif v0.0.0-20190401172101-9e8deecbddbd/go.mod h1:hPqNNc0+uJM6H+SuU8sEs5K5IQeKccPqeSjfgcKGgPk=
 github.com/ryszard/tfutils v0.0.0-20161028141955-98de232c7c68 h1:exqJQq6DxQtW5MygJ5564t+U5fnS3M6gts1kFHk1XTc=
 github.com/ryszard/tfutils v0.0.0-20161028141955-98de232c7c68/go.mod h1:qLnMB95dCgBDFl5/tAT4ZVZS1YokV+LiavtUKH0+Aow=
-github.com/sagan/go-prompt v0.0.0-20260226033802-4394e0cac252 h1:mWO/mrErQBotKHQ7lUMZj98XTboJqI8JKe2wFy4m9Go=
-github.com/sagan/go-prompt v0.0.0-20260226033802-4394e0cac252/go.mod h1:u66CVjp31ldgU/Ok1q8fA2RUmy/a9ysdMj5IZckFWKg=
+github.com/sagan/go-prompt v0.0.0-20260312090041-ecf2c08e0777 h1:a/r5eHz6wAgnFZ9jwLLn+F9mrExqJp2hBXrjxzd/ZRw=
+github.com/sagan/go-prompt v0.0.0-20260312090041-ecf2c08e0777/go.mod h1:u66CVjp31ldgU/Ok1q8fA2RUmy/a9ysdMj5IZckFWKg=
 github.com/sagan/zip v0.0.0-20240708090818-02b11188bf71 h1:u1gJL9DLPrlwSN5AEScmgstLThplZp0ssFmRuUgUcaU=
 github.com/sagan/zip v0.0.0-20240708090818-02b11188bf71/go.mod h1:ySe8E0Nur/9q4Q5XGJuVIqfP52Qy+tD0CGUas8vPkLI=
 github.com/saintfish/chardet v0.0.0-20230101081208-5e3ef4b5456d h1:hrujxIzL1woJ7AwssoOcM/tq5JjjG2yYOc8odClEiXA=

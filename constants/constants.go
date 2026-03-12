@@ -1,5 +1,7 @@
 package constants
 
+import "time"
+
 const (
 	// Env variable names
 
@@ -71,3 +73,8 @@ const HELP_TEMPERATURE_FLAG = `The temperature to use for the model. Range 0.0-2
 const HELP_LANGS = `"en", "ja", "fr", "de", "es", "pt", "ko", "ru", "ar", "zh-tw", "zh", "zh-cn", "cht", "chs"`
 
 const HELP_CHARSETS = `"utf-8", "gb-18030", "big5", "euc-jp", "iso-2022-jp", "shift_jis", "euc-kr", "utf-16be", "utf-16le". Case insensitive`
+
+// Force press ctrl+c twice in this interval to force exit
+const CTRL_C_FORCE_EXIT_INTERVAL = time.Millisecond * 300
+
+const SHELL_TIP = "(Press Ctrl + C twice in short time or use Ctrl + D to exit)\n"

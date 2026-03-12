@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/elk-language/go-prompt"
@@ -121,6 +122,8 @@ func doChat(cmd *cobra.Command, args []string) (err error) {
 		if !term.IsTerminal(int(os.Stdout.Fd())) {
 			return fmt.Errorf("no input is provided and not in tty")
 		}
+		var lastSignalTime time.Time
+		fmt.Printf(constants.SHELL_TIP)
 		p := prompt.New(func(input string) {
 			input = strings.TrimSpace(input)
 			if input == "/clear" || input == "/c" {
@@ -151,7 +154,14 @@ func doChat(cmd *cobra.Command, args []string) (err error) {
 				clipboard.CopyString(response.String())
 			}
 			fmt.Printf("\n")
-		}, prompt.WithTitle("goaider-chat"))
+		}, prompt.WithTitle("goaider-chat"), prompt.WithSignalChecker(func(signal os.Signal) bool {
+			now := time.Now()
+			if now.Sub(lastSignalTime) > constants.CTRL_C_FORCE_EXIT_INTERVAL {
+				lastSignalTime = now
+				return true
+			}
+			return false
+		}))
 		// https://github.com/elk-language/go-prompt/issues/265
 		if runtime.GOOS != "windows" {
 			defer exec.Command("reset").Run()
